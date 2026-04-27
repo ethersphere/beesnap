@@ -43,6 +43,38 @@ html, body {
   line-height: 1.5;
 }
 
+.install-prereq {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: #1a2218;
+  border: 1px solid #2d4a2d;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #c5e0c5;
+}
+.install-prereq p {
+  margin: 0 0 10px;
+}
+.install-prereq p:last-child {
+  margin-bottom: 0;
+}
+.install-prereq code {
+  background: #0d0d0d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #9fda9f;
+}
+.install-prereq strong {
+  color: #a8e6a8;
+}
+.install-prereq em {
+  font-style: normal;
+  text-decoration: underline;
+  text-decoration-color: #4a6b4a;
+}
+
 .status {
   margin: 16px 0;
   padding: 12px 16px;

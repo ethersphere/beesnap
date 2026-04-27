@@ -1,15 +1,18 @@
-## CI scripts
+# CI / deploy
 
-```
-chmod +x /var/www/beesnap/ci/deploy.sh
-```
+Deployment script and webhook notes for this repo’s server.
 
-so it can be run by webhook
+## `deploy.sh`
 
-Add a .env file to the ci folder with the following:
+Make it executable so the webhook can run it:
 
-```
-WEBHOOK_SECRET=your_secret_key
+```bash
+chmod +x ci/deploy.sh
 ```
 
-Add a webhook to the github repo on settings -> webhooks
+## Webhook
+
+1. Add a `ci/.env` file (do not commit secrets) with `WEBHOOK_SECRET=...`.
+2. In the GitHub repo: **Settings → Webhooks**, point the hook at your server endpoint that runs the deploy script with the same secret.
+
+Adjust paths if your checkout lives somewhere other than `/var/www/beesnap` (see any hardcoded paths in `deploy.sh`).

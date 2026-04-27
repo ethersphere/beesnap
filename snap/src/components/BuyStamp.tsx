@@ -66,9 +66,8 @@ export function BuyStampForm() {
       <Box>
         <Heading>Buy new storage</Heading>
         <Text>
-          Choose how much storage you need, how long it should last, and which
-          chain to pay the gas on. We fetch a live quote from Relay before you
-          commit.
+          Choose how much storage you need, how long it should last, and which chain to pay the gas
+          on.
         </Text>
 
         {/*
@@ -82,7 +81,7 @@ export function BuyStampForm() {
         <Form name={BUY_EVENTS.FORM}>
           <Field label="Pay from">
             <Dropdown name={BUY_FIELDS.CHAIN}>
-              {SOURCE_CHAINS.map((c) => (
+              {SOURCE_CHAINS.map(c => (
                 <Option value={String(c.id)}>{`${c.name} (${c.symbol})`}</Option>
               ))}
             </Dropdown>
@@ -90,33 +89,27 @@ export function BuyStampForm() {
 
           <Field label="Storage capacity">
             <Dropdown name={BUY_FIELDS.DEPTH}>
-              {STORAGE_OPTIONS.map((o) => (
-                <Option value={String(o.depth)}>
-                  {`${o.size} (depth ${o.depth})`}
-                </Option>
+              {STORAGE_OPTIONS.map(o => (
+                <Option value={String(o.depth)}>{`${o.size} (depth ${o.depth})`}</Option>
               ))}
             </Dropdown>
           </Field>
 
           <Field label="Duration">
             <Dropdown name={BUY_FIELDS.DAYS}>
-              {TIME_OPTIONS.map((o) => (
+              {TIME_OPTIONS.map(o => (
                 <Option value={String(o.days)}>{o.display}</Option>
               ))}
             </Dropdown>
           </Field>
         </Form>
 
-        <Banner
-          severity="warning"
-          title="Fund your Beesnap address on the chain you pay from"
-        >
+        <Banner severity="warning" title="Fund your Beesnap address on the chain you pay from">
           <Text>
-            The address on the home screen is the same on every network. Gnosis
-            (xDAI) pays the stamp in one step; on other networks you need the
-            native token for gas (e.g. ETH) on the chain you select — for the
-            final steps on Gnosis, Relay can top up xDAI if the balance is low
-            (extra fee may apply).
+            The address on the home screen is the same on every network. Gnosis (xDAI) pays the
+            stamp in one step; on other networks you need the native token for gas (e.g. ETH) on the
+            chain you select — for the final steps on Gnosis, Relay can top up xDAI if the balance
+            is low (extra fee may apply).
           </Text>
         </Banner>
       </Box>
@@ -169,9 +162,9 @@ export async function buildPendingPurchase(opts: {
   try {
     await syncStoredNodeAddressWithWallet();
 
-    const chain = SOURCE_CHAINS.find((c) => c.id === opts.chainId);
-    const depthOpt = STORAGE_OPTIONS.find((s) => s.depth === opts.depth);
-    const dayOpt = TIME_OPTIONS.find((t) => t.days === opts.days);
+    const chain = SOURCE_CHAINS.find(c => c.id === opts.chainId);
+    const depthOpt = STORAGE_OPTIONS.find(s => s.depth === opts.depth);
+    const dayOpt = TIME_OPTIONS.find(t => t.days === opts.days);
     if (!chain || !depthOpt || !dayOpt) {
       return { error: 'Invalid selection. Please go back and choose again.' };
     }
@@ -258,8 +251,8 @@ export function BuyStampQuote(p: PendingPurchase) {
         <Banner severity="info" title="What happens next">
           <Text>
             MetaMask will ask you to sign{' '}
-            {String(p.quote.steps.reduce((n, s) => n + (s.items?.length ?? 0), 0))}{' '}
-            transaction(s). The final one creates your storage on Swarm.
+            {String(p.quote.steps.reduce((n, s) => n + (s.items?.length ?? 0), 0))} transaction(s).
+            The final one creates your storage on Swarm.
           </Text>
         </Banner>
       </Box>
@@ -292,9 +285,8 @@ export function BuyStampProgress(p: PurchaseProgress) {
         </Section>
         <Banner severity="warning" title="Don't close MetaMask">
           <Text>
-            Closing this window during a multi-step Relay transfer can interrupt
-            the flow. The transactions themselves cannot be lost — but progress
-            updates will stop.
+            Closing this window during a multi-step Relay transfer can interrupt the flow. The
+            transactions themselves cannot be lost — but progress updates will stop.
           </Text>
         </Banner>
       </Box>
@@ -325,8 +317,7 @@ export function BuyStampDone(r: PurchaseResult) {
             </Row>
           </Section>
           <Text>
-            It can take a minute for the Bee node to pick this up. Open "View
-            my storage" to check.
+            It can take a minute for the Bee node to pick this up. Open "View my storage" to check.
           </Text>
         </Box>
         <Footer>
@@ -356,11 +347,11 @@ export function BuyStampDone(r: PurchaseResult) {
 
 export async function runPurchase(
   pending: PendingPurchase,
-  onStatus: (msg: string) => Promise<void>,
+  onStatus: (msg: string) => Promise<void>
 ): Promise<PurchaseResult> {
   try {
     await executeRelaySteps(pending.quote, {
-      onStatus: (msg) => {
+      onStatus: msg => {
         // Fire-and-forget: the entry-point router awaits these via a queue.
         void onStatus(msg);
       },

@@ -45,7 +45,7 @@ export const STAMPS_TOGGLE_OTHER_GROUP = 'stamps-toggle-other';
 export function serializeStampsForContext(d: StampsLoadResult): unknown {
   return {
     ...d,
-    batches: d.batches.map((b) => ({
+    batches: d.batches.map(b => ({
       ...b,
       totalAmount: b.totalAmount.toString(),
       normalisedBalance: b.normalisedBalance.toString(),
@@ -75,7 +75,7 @@ export function deserializeStampsFromContext(raw: unknown): StampsLoadResult {
   };
   return {
     ...o,
-    batches: o.batches.map((b) => ({
+    batches: o.batches.map(b => ({
       ...b,
       totalAmount: BigInt(b.totalAmount),
       normalisedBalance: BigInt(b.normalisedBalance),
@@ -116,7 +116,7 @@ export interface StampsLoadResult {
  * actually improved on the previous render — avoids redundant updates.
  */
 export function countResolvedStamps(d: StampsLoadResult): number {
-  return Object.values(d.stamps).filter((s) => s.info !== null).length;
+  return Object.values(d.stamps).filter(s => s.info !== null).length;
 }
 
 export async function loadStamps(account: string): Promise<StampsLoadResult> {
@@ -129,11 +129,11 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
     batches = await getOwnerBatches(account);
     console.log(
       `[stamps] registry returned ${batches.length} batch(es):`,
-      batches.map((b) => ({
+      batches.map(b => ({
         batchId: b.batchId,
         depth: b.depth,
         nodeAddress: b.nodeAddress,
-      })),
+      }))
     );
   } catch (err) {
     console.error(`[stamps] registry read failed:`, err);
@@ -161,7 +161,7 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
   const stamps: Record<string, StampEntry> = {};
   let hadStampError = false;
   await Promise.all(
-    batches.map(async (b) => {
+    batches.map(async b => {
       const idNoPrefix = b.batchId.slice(2);
       const boundToCurrentNode =
         currentNodeAddress === null
@@ -175,10 +175,7 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
           // Don't count "wrong node" as a "still resolving" warning — those
           // will never resolve from this Bee, by design.
           if (boundToCurrentNode !== false) hadStampError = true;
-          console.warn(
-            `[stamps] no Bee data for ${b.batchId} yet`,
-            outcome.debug,
-          );
+          console.warn(`[stamps] no Bee data for ${b.batchId} yet`, outcome.debug);
         } else {
           console.log(`[stamps] resolved ${b.batchId}:`, {
             usable: outcome.info.usable,
@@ -199,13 +196,13 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
         };
         if (boundToCurrentNode !== false) hadStampError = true;
       }
-    }),
+    })
   );
 
   console.log(
     `[stamps] done. ${
-      Object.values(stamps).filter((s) => s.info !== null).length
-    }/${batches.length} resolved.`,
+      Object.values(stamps).filter(s => s.info !== null).length
+    }/${batches.length} resolved.`
   );
   return { batches, stamps, registryError: undefined, hadStampError };
 }
@@ -223,7 +220,7 @@ type BatchView = {
 
 function partitionBatches(
   batches: RegistryBatch[],
-  stamps: StampsLoadResult['stamps'],
+  stamps: StampsLoadResult['stamps']
 ): { working: BatchView[]; other: BatchView[] } {
   const working: BatchView[] = [];
   const other: BatchView[] = [];
@@ -242,8 +239,7 @@ function partitionBatches(
 }
 
 export function StampsList(props: StampsListProps) {
-  const { batches, stamps, registryError, hadStampError, otherNodeGroupOpen = false } =
-    props;
+  const { batches, stamps, registryError, hadStampError, otherNodeGroupOpen = false } = props;
 
   if (registryError) {
     return (
@@ -252,10 +248,7 @@ export function StampsList(props: StampsListProps) {
           <Heading>My storage</Heading>
           <Banner severity="danger" title="Couldn't read the registry">
             <Text>{registryError}</Text>
-            <Text>
-              The on-chain registry on Gnosis is unreachable. Try again in a
-              moment.
-            </Text>
+            <Text>The on-chain registry on Gnosis is unreachable. Try again in a moment.</Text>
           </Banner>
         </Box>
         <Footer>
@@ -286,9 +279,7 @@ export function StampsList(props: StampsListProps) {
     const { b, origIndex, entry } = v;
     const n = origIndex + 1;
     const info = entry?.info ?? null;
-    const usagePct = info
-      ? getStampUsagePercent(info.utilization, info.depth)
-      : null;
+    const usagePct = info ? getStampUsagePercent(info.utilization, info.depth) : null;
     const ttl = info ? formatTTL(info.batchTTL) : 'unknown';
     return (
       <Box key={b.batchId}>
@@ -301,11 +292,7 @@ export function StampsList(props: StampsListProps) {
             <Text>{`depth ${b.depth}`}</Text>
           </Row>
           <Row label="Used">
-            <Text>
-              {usagePct === null
-                ? 'unavailable'
-                : `${usagePct.toFixed(2)}%`}
-            </Text>
+            <Text>{usagePct === null ? 'unavailable' : `${usagePct.toFixed(2)}%`}</Text>
           </Row>
           <Row label="Expires in">
             <Text>{ttl}</Text>
@@ -318,10 +305,9 @@ export function StampsList(props: StampsListProps) {
         {entry?.boundToCurrentNode === true && !info ? (
           <Banner severity="info" title="Details still loading on Bee">
             <Text>
-              This storage is on the Bee node you are using. It can take 1–2
-              minutes after a purchase to propagate — then used % and time left
-              will show here. Tap Refresh or wait; this screen can update on
-              its own.
+              This storage is on the Bee node you are using. It can take 1–2 minutes after a
+              purchase to propagate — then used % and time left will show here. Tap Refresh or wait;
+              this screen can update on its own.
             </Text>
           </Banner>
         ) : null}
@@ -329,9 +315,9 @@ export function StampsList(props: StampsListProps) {
         {showItemWrongNodeBanner && entry?.boundToCurrentNode === false ? (
           <Banner severity="warning" title="Bound to a different Bee node">
             <Text>
-              This storage was created against another Bee node and can't be
-              used from your current one. Either point the Snap at the original
-              Bee node in Settings, or buy new storage on this node.
+              This storage was created against another Bee node and can't be used from your current
+              one. Either point the Snap at the original Bee node in Settings, or buy new storage on
+              this node.
             </Text>
           </Banner>
         ) : null}
@@ -346,40 +332,36 @@ export function StampsList(props: StampsListProps) {
       <Box>
         <Heading>My storage</Heading>
         <Text>
-          {String(batches.length)}{' '}
-          {batches.length === 1 ? 'item' : 'items'} registered to this account.
+          {String(batches.length)} {batches.length === 1 ? 'item' : 'items'} registered to this
+          account.
         </Text>
 
         {hadStampError ? (
           <Banner severity="warning" title="Some details still resolving">
             <Text>
-              Bee hasn't picked up one or more items yet — usually 1–3 minutes
-              after a fresh purchase. The screen will refresh automatically for
-              the next 2 minutes, or tap Refresh to re-check now.
+              Bee hasn't picked up one or more items yet — usually 1–3 minutes after a fresh
+              purchase. The screen will refresh automatically for the next 2 minutes, or tap Refresh
+              to re-check now.
             </Text>
           </Banner>
         ) : (
-          <Text>{' '}</Text>
+          <Text> </Text>
         )}
 
         <Section>
           <Heading size="sm">Storages on this Bee node</Heading>
           <Text>
-            The following {working.length === 1 ? 'entry is' : 'entries are'} usable
-            with the API URL in Settings, with full details shown.
-            {other.length > 0
-              ? ' Storages on another node are in one group at the bottom (hidden until you open it).'
-              : ''}
+            The following {working.length === 1 ? 'entry is' : 'entries are'} usable with the API
+            URL in Settings, with full details shown.
           </Text>
 
           <Box>
             {working.length > 0 ? (
-              working.map((v) => oneStorage(v, false))
+              working.map(v => oneStorage(v, false))
             ) : (
               <Text>
-                None. Everything in your list is bound to a different Bee node
-                than the one in Settings — use the group below, or add storage
-                for this node from Buy.
+                None. Everything in your list is bound to a different Bee node than the one in
+                Settings — use the group below, or add storage for this node from Buy.
               </Text>
             )}
           </Box>
@@ -405,16 +387,13 @@ export function StampsList(props: StampsListProps) {
             </Button>
             {otherNodeGroupOpen ? (
               <Box>
-                <Banner
-                  severity="warning"
-                  title="Different Bee node in Settings"
-                >
+                <Banner severity="warning" title="Different Bee node in Settings">
                   <Text>
-                    The storages below cannot be used until you set the same Bee
-                    API in Settings, or you buy new storage for this node.
+                    The storages below cannot be used until you set the same Bee API in Settings, or
+                    you buy new storage for this node.
                   </Text>
                 </Banner>
-                {other.map((v) => oneStorage(v, false))}
+                {other.map(v => oneStorage(v, false))}
               </Box>
             ) : null}
           </Section>

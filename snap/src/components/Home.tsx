@@ -54,32 +54,22 @@ export interface HomeProps {
 const LOW_BALANCE_THRESHOLD_WEI = 50_000_000_000_000_000n; // 0.05 xDAI
 
 export function Home({ beesnapAddress, chainBalances }: HomeProps) {
-  const gnosisWei = chainBalances.find(
-    (c) => c.chainId === GNOSIS_CHAIN_ID,
-  )?.wei;
+  const gnosisWei = chainBalances.find(c => c.chainId === GNOSIS_CHAIN_ID)?.wei;
   const lowBalance =
-    gnosisWei !== null &&
-    gnosisWei !== undefined &&
-    gnosisWei < LOW_BALANCE_THRESHOLD_WEI;
+    gnosisWei !== null && gnosisWei !== undefined && gnosisWei < LOW_BALANCE_THRESHOLD_WEI;
 
   return (
     <Container>
       <Box>
         <Heading>Beesnap</Heading>
-        <Text>
-          Buy storage on Swarm and upload files to your Bee node — without
-          leaving MetaMask.
-        </Text>
+        <Text>Buy storage on Swarm and upload files</Text>
 
         <Divider />
 
         <Section>
           <Heading size="sm">Your Beesnap account</Heading>
           <Text>
-            This address is derived from your secret recovery phrase and is
-            unique to this Snap. Gnosis (xDAI) pays the stamp; when you use Buy
-            from other networks, fund the native token on that chain. Balances
-            below are the same address on each network.
+            This address is derived from your secret recovery phrase and is unique to this Snap.
           </Text>
           <Row label="Address">
             <Address address={beesnapAddress} />
@@ -87,12 +77,9 @@ export function Home({ beesnapAddress, chainBalances }: HomeProps) {
           <Row label="Copy">
             <Copyable value={beesnapAddress} />
           </Row>
-          {chainBalances.map((c) => {
+          {chainBalances.map(c => {
             const label = `${c.name} (${c.symbol})`;
-            const v =
-              c.wei === null
-                ? 'unavailable'
-                : `${formatNativeWei(c.wei)} ${c.symbol}`;
+            const v = c.wei === null ? 'unavailable' : `${formatNativeWei(c.wei)} ${c.symbol}`;
             return (
               <Row key={`bal-${String(c.chainId)}`} label={label}>
                 <Text>{v}</Text>
@@ -104,8 +91,8 @@ export function Home({ beesnapAddress, chainBalances }: HomeProps) {
         {lowBalance ? (
           <Banner severity="warning" title="Low balance">
             <Text>
-              Your Beesnap account has less than 0.05 xDAI. Send some xDAI on
-              Gnosis to the address above before trying to buy a stamp.
+              Your Beesnap account has less than 0.05 xDAI. Send some xDAI on Gnosis to the address
+              above before trying to buy a stamp.
             </Text>
           </Banner>
         ) : null}

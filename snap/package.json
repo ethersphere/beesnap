@@ -17,8 +17,8 @@
     "build": "mm-snap build",
     "build:clean": "rimraf dist && mm-snap build",
     "dev": "mm-snap watch",
-    "serve": "mm-snap serve",
     "watch": "mm-snap watch",
+    "serve": "mm-snap serve",
     "manifest": "mm-snap manifest --fix",
     "lint": "tsc --noEmit"
   },

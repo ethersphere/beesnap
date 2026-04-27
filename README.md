@@ -1,154 +1,68 @@
-# Beesnap — MetaMask Snap
+# Beesnap
 
-Beesnap is a MetaMask Snap that lets users buy Swarm postage stamps and upload
-files to a Bee node — directly from inside MetaMask, with no separate dApp UI
-to bounce through.
+MetaMask Snap for **Swarm** postage: buy stamps and upload to a **Bee** node from inside the wallet, plus a minimal **Next.js** page that only installs the Snap.
 
-This repo (v2.x) replaces the previous Next.js dApp (v1.x). The v1 SwapComponent / RainbowKit / wagmi UI has been retired in favour of a Snap home page rendered with [Snap JSX](https://docs.metamask.io/snaps/features/custom-ui/).
+The interactive UI lives in `snap/` ([Snap custom UI / JSX](https://docs.metamask.io/snaps/features/custom-ui/)). The previous full web dApp was removed; the install site under `src/app/` is intentionally tiny.
 
-> **What's a Snap?** A Snap is a sandboxed JS module that runs *inside*
-> MetaMask. It can render its own home page, sign messages, send transactions
-> via the user's existing MetaMask account, persist encrypted state, and call
-> `fetch()` against a network the user permitted at install time.
->
-> Snaps are not websites and don't replace dApps everywhere — but a Snap *is*
-> the right shape for this product because the entire user journey (pick depth,
-> buy stamp, sign upload, view history) is short, stateful, and naturally
-> belongs next to the user's wallet.
+## Repository layout
 
-## Repo layout
+| Path | Role |
+|------|------|
+| `snap/` | Snap bundle: `onInstall`, home page, buy flow, stamps, upload, settings |
+| `src/app/` | Install page: `wallet_requestSnaps` only |
+| `backend/` | Bee proxy + signature checks (unchanged contract with Snap) |
+| `contracts/`, `deploy/`, `scripts/` | Gnosis contracts and Hardhat tooling |
+| `misc/` | Optional maintenance scripts (registry export, etc.) |
+| `docs/` | **Legacy** guides for the old pre-Snap UI — kept as reference only |
 
-```
-beesnap/
-├── snap/                    ← The Snap. New code lives here.
-│   ├── snap.manifest.json
-│   ├── snap.config.ts
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── src/
-│       ├── index.tsx         ← onInstall, onHomePage, onUserInput, onRpcRequest
-│       ├── components/       ← Snap JSX screens (Home, BuyStamp, Upload, …)
-│       └── lib/              ← constants, abis, ethereum, relay, bee, state
-├── src/                     ← The install page (Next.js).
-│   └── app/
-│       ├── page.tsx          ← Calls wallet_requestSnaps. Nothing else.
-│       ├── layout.tsx
-│       ├── install.css
-│       └── components/      ← ⚠️ ORPHANED v1 dApp code. Safe to delete.
-├── backend/                 ← UNCHANGED. Same proxy + signature middleware.
-├── contracts/               ← UNCHANGED. Solidity for StampsRegistry + SushiSwapStampsRouter.
-├── deploy/                  ← UNCHANGED. Hardhat deploy scripts.
-└── scripts/                 ← UNCHANGED. Contract verification scripts.
-```
+## Requirements
 
-The **backend** (`backend/index.js`) is unchanged. The Snap calls the same
-`/bzz`, `/stamps` endpoints the v1 dApp called, with the same headers and the
-same EIP-191 signature format the backend's `verifySignature` middleware
-already validates.
+- **Node** 20+
+- **MetaMask** with Snaps (stable channel supports published Snaps; [Flask](https://docs.metamask.io/snaps/get-started/install-flask/) for local dev)
 
-The **contracts** (`StampsRegistry`, `SushiSwapStampsRouter`) are unchanged.
-The Snap reads `getOwnerBatches` from the registry and encodes calls to the
-postage stamp contract's `createBatchRegistry` exactly as the v1 dApp did.
-
-## Getting started
+## Local development
 
 ```bash
-# 1. Install root deps + Snap deps
+# Root + Snap dependencies
 npm install
 npm run snap:install
 
-# 2. Run the Snap dev server (serves the bundle to MetaMask Flask)
-npm run snap:serve   # http://localhost:8080
+# Terminal 1 — Snap: dev server for the bundle on 8080 + rebuilds on change
+# (`snap:dev` and `snap:watch` are the same; `cd snap` also has `dev` and `watch`)
+npm run snap:dev
 
-# 3. In another terminal, run the install page
-npm run dev          # http://localhost:3000
-
-# 4. (Optional) Run the backend locally
-npm run backend:dev  # http://localhost:3333
+# Terminal 2 — website that calls wallet_requestSnaps (Next.js, not the Snap file host)
+npm run dev
 ```
 
-Open `http://localhost:3000`, click **Install Snap**, confirm in MetaMask
-Flask, then open MetaMask → Snaps → Beesnap.
+- **8080 — Snap only:** `snap:dev` already starts the server MetaMask needs. You do **not** run `serve` in addition, unless you switch workflow to “serve the last `dist/`” via `npm run snap:build` then `npm run snap:serve` (same port — pick one process).
+- **3000 — install page only:** root `npm run dev` is the Next.js site at [http://localhost:3000](http://localhost:3000) with the Install button. It does not host the Snap; MetaMask still loads the bundle from 8080.
+- Local id: `local:http://localhost:8080` (see `src/app/page.tsx` and `snap/snap.config.ts`).
+- **Optional** — `npm run backend:dev` (see `backend/README.md`).
 
-> You need [MetaMask Flask](https://docs.metamask.io/snaps/get-started/install-flask/) for development. Stable MetaMask only supports Snaps published to npm.
+### Troubleshooting: “executor failed to initialize / … worker failed to load”
 
-## What's implemented (v1.5)
+1. **Snap server must be running** — the install page does not host the bundle. Keep `npm run snap:dev` (or, after a build, `npm run snap:serve`) in another terminal. Open `http://localhost:8080` in a browser to confirm the server responds. If you see **`EADDRINUSE` on 8080**, stop the other process using that port or change `server.port` in `snap/snap.config.ts` and set the same value in `NEXT_PUBLIC_SNAP_ID` for the Next app.
+2. **Many different Snaps fail** in MetaMask: usually a **MetaMask or browser** issue, not this repo. Try: restart the browser, update the extension, or a clean profile.
+3. **Production** — set `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap` (and a matching version) so you are not using localhost.
 
-- ✅ **Beesnap account** — a key derived deterministically from your secret recovery phrase via `snap_getEntropy` (salt string `beeport-account-v1` in code — unchanged so existing addresses stay stable). Same recovery phrase always yields the same address, but it never collides with any of your normal MetaMask accounts (MetaMask explicitly forbids Snaps from deriving at the user's BIP44 paths). The Snap signs and broadcasts every transaction with this account.
-- ✅ **View my stamps** — reads on-chain registry on Gnosis (for the Snap-derived account), decorates with utilization + TTL from the Bee node.
-- ✅ **Buy a new stamp** — pick depth + duration, fetch live Relay quote, sign + broadcast each Relay step locally with that key. Gnosis-only in v1.5; cross-chain comes later.
-- ✅ **Upload a file** — pick stamp + file, sign auth message with the Snap key, POST to `${beeApiUrl}/bzz`. **No upload progress** (Snap `fetch` doesn't expose it; see honest caveats below).
-- ✅ **View my uploads** — local Snap-state record of what the Snap-derived account has uploaded through this Snap.
+## What the Snap does (high level)
 
-## Why the Snap-derived account exists
+- Derives a **dedicated account** from the user’s recovery phrase via `snap_getEntropy` (see `snap/src/lib/wallet.ts` for the fixed salt).
+- **Buy storage** with Relay: pay from several EVM chains, settle on Gnosis; **Gnosis (xDAI)** is the chain where the stamp and registry live.
+- **Home** shows native balances on the same “pay from” networks as the buy dropdown.
+- **View storage**, **upload** with Swarm/ Bee APIs, and **view upload history** (Snap state).
 
-Snaps **cannot** call `eth_sendTransaction` on the user's main MetaMask account — it's not in the allowlist for `endowment:ethereum-provider`. So we either:
+Limits (real platform constraints) are still true: e.g. no fine-grained **upload progress** in Snap `fetch`, and very large files are impractical.
 
-1. Bounce the user out to a companion dApp page that *can* call `eth_sendTransaction` from a normal `window.ethereum` context (rejected — user wanted everything inside MetaMask).
-2. Have the Snap manage its own key, derived from the user's secret recovery phrase, and sign + send transactions itself. **This is what we do.**
+## Permissions
 
-The trade-off: stamps bought through this Snap are owned by the Snap-derived address, not your main MetaMask address. You need to fund that address (xDAI for gas + paying for stamps) before buying. The home page shows the address with a Copyable so you can send funds to it from any wallet.
+See `snap/snap.manifest.json` `initialPermissions`. The Snap does **not** use `endowment:ethereum-provider` for the user’s main MetaMask account — it signs and sends from the **Snap-derived** key over allowed RPC URLs.
 
-Stamps bought before v1.5 (registered to your main MetaMask address in the v1 dApp) **will not appear in the Snap** — they're owned by a different address. You can still see and use them via the v1 dApp if you keep it deployed somewhere.
+## Backend and contracts
 
-## Honest caveats
+The Bee proxy, registry, and Sushi/Relay paths the Snap uses are the same family as the original app. Details: `backend/README.md`, `contracts/README.md`.
 
-These are real platform limits — not bugs:
+## License / repo
 
-- **No upload progress bar.** Snap UI runs only `fetch`, not `XMLHttpRequest`,
-  and `fetch` exposes no upload-progress events. The screen says "uploading…"
-  until the Bee node responds. For multi-GB uploads this is a noticeably worse
-  experience than the v1 dApp's progress bar.
-- **No file uploads larger than ~a few hundred MB.** `FileInput` returns the
-  file as a base64 string; the bytes round-trip through SES-isolated worker
-  memory. Large files degrade hard.
-- **No background uploads.** Closing MetaMask while an upload is in flight
-  drops the UI; the request itself depends on whether the browser keeps the
-  connection alive (it usually doesn't).
-- **NEVER mocked.** Per project rule: if the Snap can't reach the registry,
-  the Bee node, or Relay, we say so. No fake stamps, no fake uploads, no
-  optimistic UI. Failures are visible.
-
-## Snap permissions (initialPermissions)
-
-```jsonc
-"endowment:rpc": { "dapps": true, "snaps": false },
-"endowment:network-access": {},        // fetch to api.relay.link, beeport.xyz, gnosis RPCs
-"endowment:page-home": {},             // the Beesnap tab in MetaMask
-"snap_dialog": {},                     // welcome dialog on install
-"snap_manageState": {},                // upload history, settings
-"snap_notify": {},                     // (reserved for future use)
-"snap_getEntropy": {}                  // derives the Snap account (32 bytes, salted by Snap id)
-```
-
-The Snap intentionally does **not** request `endowment:ethereum-provider`. The user's main MetaMask account is never accessed by this Snap — all signing and transaction broadcasting goes through the Snap-derived account.
-
-## Backend & contracts (unchanged)
-
-The backend at `backend/index.js` proxies the Bee node's `/bzz`, `/stamps`,
-`/tags`, `/wallet` endpoints and verifies an EIP-191 signature over
-`${fileName}:${batchId}` plus on-chain batch ownership before forwarding the
-request. The Snap produces these same headers, so no backend change is required.
-
-See `backend/README.md` for the nginx config and `backend/.env.example` for
-the env vars (unchanged).
-
-## Manual cleanup of v1 dApp code
-
-The previous Next.js app's source — `src/app/components/*.tsx`,
-`src/app/wagmi.ts`, `src/app/providers.tsx`, plus several .css modules — is
-no longer imported anywhere. It's safe to `rm -rf` once you've verified the
-new install page works:
-
-```bash
-rm src/app/wagmi.ts src/app/providers.tsx src/app/page.module.css src/app/globals.css
-rm -rf src/app/components
-```
-
-Also old root-level deps that the Snap doesn't need are now removed from the
-root `package.json` (RainbowKit, wagmi, viem, alchemy-sdk, jszip, etc.). The
-`node_modules` cache should be wiped:
-
-```bash
-rm -rf node_modules package-lock.json && npm install
-```
+Project metadata is in the root `package.json`. For issues, use the linked GitHub tracker.

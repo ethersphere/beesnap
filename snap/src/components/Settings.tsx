@@ -50,11 +50,7 @@ export function SettingsForm(p: SettingsFormProps) {
     <Container>
       <Box>
         <Heading>Settings</Heading>
-        <Text>
-          Set your Bee API base URL. The Swarm node address is always read from
-          GET /wallet on that host — it is saved automatically when you open
-          Home or after you save.
-        </Text>
+        <Text>Set your Bee API base URL.</Text>
 
         {p.savedJustNow ? (
           <Banner severity="success" title="Saved">
@@ -68,9 +64,7 @@ export function SettingsForm(p: SettingsFormProps) {
         ) : null}
         {p.walletProbe?.ok ? (
           <Banner severity="success" title="Node address from Bee">
-            <Text>
-              {`From ${p.walletProbe.from}: ${p.walletProbe.nodeAddress}`}
-            </Text>
+            <Text>{`From ${p.walletProbe.from}: ${p.walletProbe.nodeAddress}`}</Text>
           </Banner>
         ) : null}
         {p.walletProbe && !p.walletProbe.ok ? (
@@ -122,9 +116,9 @@ export function SettingsForm(p: SettingsFormProps) {
 
         <Banner severity="info" title="Why would I change this?">
           <Text>
-            The default Bee API must allow cross-origin requests from Snaps. If
-            "View my storage" shows "Failed to fetch", point this at a Bee
-            proxy you control (or one with permissive CORS) and save.
+            The Bee API must allow cross-origin requests from Snaps. If "View my storage" shows
+            "Failed to fetch", point this at a Bee proxy you control (or one with permissive CORS)
+            and save.
           </Text>
         </Banner>
       </Box>
@@ -135,15 +129,12 @@ export function SettingsForm(p: SettingsFormProps) {
   );
 }
 
-export function validateBeeApiUrl(
-  input: string,
-): { error: string } | { ok: true; value: string } {
+export function validateBeeApiUrl(input: string): { error: string } | { ok: true; value: string } {
   let trimmed = input.trim();
   if (trimmed === '') return { ok: true, value: '' };
   if (!/^https?:\/\/[^\s/]+/i.test(trimmed)) {
     return {
-      error:
-        'Bee API URL must start with http:// or https:// (e.g. https://beeport.xyz).',
+      error: 'Bee API URL must start with http:// or https:// (e.g. https://beeport.xyz).',
     };
   }
   while (trimmed.endsWith('/')) trimmed = trimmed.slice(0, -1);

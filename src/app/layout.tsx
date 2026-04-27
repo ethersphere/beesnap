@@ -1,13 +1,6 @@
-/*
- * Minimal Next.js layout for the Beesnap Snap install page.
- *
- * Everything related to wallet connections, swap UI, and uploads has moved
- * into the Snap (`/snap`). What's left here is a single page whose only job
- * is to call `wallet_requestSnaps` so users can install the Snap.
- *
- * Old files under `src/app/` (providers.tsx, wagmi.ts, components/*) are
- * orphaned dead code from the v0 dApp. They are no longer imported. Delete
- * them manually when you're satisfied with the new install flow.
+/**
+ * Next.js layout for the Beesnap Snap install page.
+ * Only `page.tsx` + `install.css` are used; the app UI lives in `snap/`.
  */
 import type { Metadata } from 'next';
 import './install.css';

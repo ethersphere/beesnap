@@ -7,8 +7,8 @@
  * and tell the user to open the Beesnap tab in MetaMask. There is no
  * connect-button or upload UI here — that all moved into the Snap.
  *
- * The snap id default `local:http://localhost:8080` matches the Snap's dev
- * server (`mm-snap serve`) so this page works end-to-end during development.
+ * The snap id default `local:http://localhost:8080` matches `snap/snap.config.ts`
+ * so this page works end-to-end in dev.
  * For production you set `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap` in the env.
  */
 import { useEffect, useState } from 'react';
@@ -16,6 +16,8 @@ import { useEffect, useState } from 'react';
 const SNAP_ID =
   process.env.NEXT_PUBLIC_SNAP_ID || 'local:http://localhost:8080';
 const SNAP_VERSION = process.env.NEXT_PUBLIC_SNAP_VERSION || '0.1.0';
+
+const IS_LOCAL_SNAP = SNAP_ID.startsWith('local:');
 
 type WalletStatus =
   | 'idle'
@@ -86,6 +88,30 @@ export default function InstallPage() {
         files from your wallet.
       </p>
 
+      {IS_LOCAL_SNAP ? (
+        <div className="install-prereq" role="note">
+          <p>
+            <strong>Snap on port 8080:</strong> at the repo root run{' '}
+            <code>npm run snap:dev</code> and keep it open. That command runs
+            the Snaps CLI in watch mode — it <em>is</em> the HTTP server for the
+            Snap; you do <em>not</em> also need <code>npm run serve</code> unless
+            you intentionally switch to a pre-built bundle (after{' '}
+            <code>cd snap &amp;&amp; npm run build</code> use{' '}
+            <code>npm run snap:serve</code> instead, not both on the same port).
+          </p>
+          <p>
+            <strong>Install page on port 3000:</strong> in another terminal run{' '}
+            <code>npm run dev</code> (root Next.js app) so you can open this page
+            and click Install Snap. MetaMask still fetches the bundle from 8080;
+            the Next app does not host the Snap.
+          </p>
+          <p>
+            If <code>http://localhost:8080</code> does not load in a browser
+            tab, you will get &quot;executor failed to initialize&quot;.
+          </p>
+        </div>
+      ) : null}
+
       <Status status={status} errorMsg={errorMsg} />
 
       {status === 'ready' && (
@@ -104,7 +130,7 @@ export default function InstallPage() {
           <p>
             Open MetaMask, click the menu (top left), pick <b>Snaps</b>, then
             select <b>Beesnap</b>. From there you can buy stamps, upload files,
-            and view what you've uploaded.
+            and view what you have uploaded.
           </p>
         </div>
       )}
@@ -155,7 +181,7 @@ function Status({
     case 'snap-not-supported':
       return (
         <p className="status warn">
-          Your MetaMask version doesn't support Snaps. Update MetaMask to the
+          Your MetaMask version does not support Snaps. Update MetaMask to the
           latest stable version.
         </p>
       );
@@ -172,7 +198,7 @@ function Status({
     case 'error':
       return (
         <p className="status error">
-          Couldn't install the Snap: {errorMsg ?? 'unknown error'}
+          Could not install the Snap: {errorMsg ?? 'unknown error'}
         </p>
       );
   }

@@ -1,79 +1,18 @@
-# Registry Data Migration Script
+# Misc maintenance scripts
 
-This script fetches all `BatchCreated` events from the old StampsRegistry contract and saves them to a JSON file. This data can be used to migrate to the new contract or for analysis purposes.
+One-off or rare tools. They are **not** part of the Snap or the install site.
 
-## Setup
+## Registry export
 
-1. Install dependencies:
-   ```bash
-   npm install ethers@^6.0.0
-   ```
+`export_registry_data.js` — fetches `BatchCreated` events from a registry contract on Gnosis and writes `registry_data.json` in this directory.
 
-2. Optional: Configure environment variables in `.env.local`:
-   ```
-   GNOSIS_RPC_URL=your_rpc_url_here  # Optional, defaults to public RPC
-   ```
-
-## Usage
-
-Run the script:
 ```bash
-npx ts-node misc/migrate_registry_data.ts
+cd misc
+# Optional: GNOSIS_RPC_URL=... 
+node export_registry_data.js
 ```
 
-The script will:
-1. Connect to Gnosis Chain
-2. Fetch all BatchCreated events from the contract creation block
-3. Process and organize the data
-4. Save it to `misc/registry_data.json`
+## Other files
 
-## Output Format
-
-The script generates a JSON file with the following structure:
-
-```typescript
-{
-  metadata: {
-    contractAddress: string,
-    startBlock: number,
-    endBlock: number,
-    totalBatches: number,
-    uniqueOwners: number,
-    exportDate: string,
-  },
-  batchesByOwner: {
-    [ownerAddress: string]: Array<{
-      batchId: string,
-      totalAmount: string,
-      normalisedBalance: string,
-      owner: string,
-      payer: string,
-      depth: number,
-      bucketDepth: number,
-      immutable_: boolean,
-      blockNumber: number,
-      transactionHash: string,
-      timestamp: number,
-      date: string,
-    }>,
-  },
-  allBatches: Array<BatchData>, // Same structure as above
-}
-```
-
-## Data Usage
-
-The exported data can be used to:
-1. Analyze batch creation patterns
-2. Verify data before migration
-3. Import data into the new contract
-4. Generate reports on stamp usage
-
-## Error Handling
-
-The script includes error handling for:
-- Network connection issues
-- Event parsing failures
-- File system operations
-
-If any errors occur, they will be logged to the console and the script will exit with a non-zero status code. 
+- `import_registry_data.js` — import / migration helper (read the script before use).
+- `testFromBZZ.js`, `testFromUSD.js`, `testTo.js`, `testCC.js` — ad-hoc test scripts; safe to delete locally if you do not use them.
