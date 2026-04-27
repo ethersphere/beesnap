@@ -34,7 +34,11 @@ import {
   fetchNodeWalletAddress,
   syncStoredNodeAddressWithWallet,
 } from './lib/bee';
-import { DEFAULT_BEE_API_URL, SOURCE_CHAINS } from './lib/constants';
+import {
+  DEFAULT_BEE_API_URL,
+  MAX_SNAP_UPLOAD_BINARY_BYTES,
+  SOURCE_CHAINS,
+} from './lib/constants';
 
 /**
  * Mirrors the discriminated-union shape of `SettingsFormProps['walletProbe']`.
@@ -51,7 +55,7 @@ import {
   getState,
   setState,
 } from './lib/state';
-import { describeError } from './lib/utils';
+import { describeError, isLikelyExtensionMessageSizeError } from './lib/utils';
 
 import { Home, NAV_EVENTS, type HomeChainBalance } from './components/Home';
 import {
@@ -65,6 +69,7 @@ import {
 } from './components/StampsList';
 import {
   UploadForm,
+  UploadIntro,
   UploadInFlight,
   UploadDone,
   UPLOAD_EVENTS,
@@ -218,6 +223,18 @@ export const onUserInput: OnUserInputHandler = async ({ id, event, context }) =>
         | { name: string; size: number; contentType: string; contents: string }
         | null;
       if (file) {
+        if (file.size > MAX_SNAP_UPLOAD_BINARY_BYTES) {
+          const account = await getBeesnapAddress();
+          const data = await loadUsableStamps(account);
+          await update(
+            id,
+            <UploadForm
+              {...data}
+              fileSizeRejected={{ name: file.name, size: file.size }}
+            />,
+          );
+          return;
+        }
         const account = await getBeesnapAddress();
         const data = await loadUsableStamps(account);
         await update(
@@ -319,10 +336,7 @@ async function handleButton(
     return;
   }
   if (name === NAV_EVENTS.UPLOAD) {
-    const account = await getBeesnapAddress();
-    await update(id, <Loading title="Loading your stamps" />);
-    const data = await loadUsableStamps(account);
-    await update(id, <UploadForm {...data} />);
+    await reloadUploadScreen(id, 'Loading your stamps', false);
     return;
   }
   if (name === NAV_EVENTS.SETTINGS) {
@@ -432,6 +446,14 @@ async function handleButton(
 
   // ── Upload flow ─────────────────────────────────────────────────────────────
   if (name === UPLOAD_EVENTS.RETRY) {
+    await reloadUploadScreen(id, 'Loading your storage', true);
+    return;
+  }
+  if (name === UPLOAD_EVENTS.RESET_PICKER) {
+    await reloadUploadScreen(id, 'Loading your storage', true);
+    return;
+  }
+  if (name === UPLOAD_EVENTS.PROCEED_TO_PICKER) {
     const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your storage" />);
     const data = await loadUsableStamps(account);
@@ -442,12 +464,32 @@ async function handleButton(
     // Upload button now lives in the Footer (not as a form submit), so we
     // pull the dropdown + file from interface state instead of an
     // event payload.
-    const formState = (await snap.request({
-      method: 'snap_getInterfaceState',
-      params: { id },
-    })) as Record<string, any>;
-    const formValues = (formState[UPLOAD_EVENTS.FORM] ?? {}) as Record<string, any>;
-    await runUploadFromForm(id, formValues);
+    try {
+      const formState = (await snap.request({
+        method: 'snap_getInterfaceState',
+        params: { id },
+      })) as Record<string, any>;
+      const formValues = (formState[UPLOAD_EVENTS.FORM] ?? {}) as Record<
+        string,
+        any
+      >;
+      await runUploadFromForm(id, formValues);
+    } catch (err) {
+      const mb = Math.round(MAX_SNAP_UPLOAD_BINARY_BYTES / (1024 * 1024));
+      const sizeHit = isLikelyExtensionMessageSizeError(err);
+      await update(
+        id,
+        <UploadDone
+          success={false}
+          filename="your file"
+          errorMessage={
+            sizeHit
+              ? `That payload is too large for MetaMask Snaps. Chromium caps extension messages at 64 MiB (this Snap allows about ${mb} MB per file so base64 fits safely). Reload MetaMask if the Beesnap tab stays on loading.`
+              : describeError(err)
+          }
+        />,
+      );
+    }
     return;
   }
 
@@ -571,6 +613,26 @@ async function update(
 }
 
 /**
+ * Load upload flow. When `skipIntro` is false and the user can upload, show
+ * {@link UploadIntro} first so MetaMask never mounts `FileInput` until they
+ * acknowledge the size cap (MetaMask reads the full file before the Snap).
+ */
+async function reloadUploadScreen(
+  id: string,
+  loadingTitle: string,
+  skipIntro: boolean,
+): Promise<void> {
+  const account = await getBeesnapAddress();
+  await update(id, <Loading title={loadingTitle} />);
+  const data = await loadUsableStamps(account);
+  const needsGate =
+    !skipIntro &&
+    data.stamps.length > 0 &&
+    !data.registryError;
+  await update(id, needsGate ? <UploadIntro /> : <UploadForm {...data} />);
+}
+
+/**
  * Shared "read the upload form, validate, run the upload" logic. Called
  * from the Footer-button code path (which reads form state via
  * `snap_getInterfaceState`).
@@ -592,15 +654,64 @@ async function runUploadFromForm(
     throw new Error('Please choose a file to upload.');
   }
 
-  await update(id, <UploadInFlight filename={file.name} />);
-  const result: UploadDoneProps = await runUpload({
-    batchId,
-    filename: file.name,
-    contentType: file.contentType,
-    base64: file.contents,
-    isWebsite: false,
-  });
-  await update(id, <UploadDone {...result} />);
+  const mb = Math.round(MAX_SNAP_UPLOAD_BINARY_BYTES / (1024 * 1024));
+  const limitMsg = `Maximum for Snap uploads is about ${mb} MB (browser / MetaMask message size limit).`;
+
+  if (file.size > MAX_SNAP_UPLOAD_BINARY_BYTES) {
+    await update(
+      id,
+      <UploadDone
+        success={false}
+        filename={file.name}
+        errorMessage={`${file.name} is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). ${limitMsg} Tap "Try again" to pick another file.`}
+      />,
+    );
+    return;
+  }
+
+  const rawPayload =
+    typeof file.contents === 'string' && file.contents.includes(',')
+      ? file.contents.slice(file.contents.indexOf(',') + 1)
+      : String(file.contents);
+  const pad =
+    rawPayload.length >= 2 && rawPayload.endsWith('==')
+      ? 2
+      : rawPayload.endsWith('=')
+        ? 1
+        : 0;
+  const approxDecoded = Math.max(0, Math.floor((rawPayload.length * 3) / 4) - pad);
+  if (approxDecoded > MAX_SNAP_UPLOAD_BINARY_BYTES) {
+    await update(
+      id,
+      <UploadDone
+        success={false}
+        filename={file.name}
+        errorMessage={`This file does not fit the Snap upload bridge (~${Math.round(approxDecoded / (1024 * 1024))} MB decoded). ${limitMsg}`}
+      />,
+    );
+    return;
+  }
+
+  try {
+    await update(id, <UploadInFlight filename={file.name} />);
+    const result: UploadDoneProps = await runUpload({
+      batchId,
+      filename: file.name,
+      contentType: file.contentType,
+      base64: file.contents,
+      isWebsite: false,
+    });
+    await update(id, <UploadDone {...result} />);
+  } catch (err) {
+    await update(
+      id,
+      <UploadDone
+        success={false}
+        filename={file.name}
+        errorMessage={describeError(err)}
+      />,
+    );
+  }
 }
 
 /**

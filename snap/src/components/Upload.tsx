@@ -35,6 +35,7 @@ import {
 import {
   DEFAULT_BEE_API_URL,
   BEE_GATEWAY_URL,
+  MAX_SNAP_UPLOAD_BINARY_BYTES,
 } from '../lib/constants';
 import {
   fetchStampInfo,
@@ -55,6 +56,14 @@ export const UPLOAD_EVENTS = {
   /** Footer button click that triggers the upload. Lives outside the Form so we read state by hand. */
   SUBMIT: 'upload-submit',
   RETRY: 'upload-retry',
+  /** After an oversize file pick, reload a clean upload form (drops stuck file state). */
+  RESET_PICKER: 'upload-reset-picker',
+  /**
+   * User passed the pre-picker safety screen — show {@link UploadForm} with
+   * {@link FileInput}. MetaMask reads the whole file as soon as the picker
+   * confirms, so we never render FileInput before this ack.
+   */
+  PROCEED_TO_PICKER: 'upload-proceed-to-picker',
 } as const;
 
 export const UPLOAD_FIELDS = {
@@ -125,6 +134,37 @@ export async function loadUsableStamps(account: string): Promise<{
   };
 }
 
+// ── Pre-picker gate (no FileInput — MetaMask would read bytes before Snap runs) ─
+
+/**
+ * Shown when opening Upload from Home with usable stamps. There is no
+ * `FileInput` here: MetaMask's UI reads the full file into memory and base64
+ * before `onUserInput` runs, so a 60 MB pick can exceed Chromium's 64 MiB IPC
+ * cap and brick the extension before our size checks execute.
+ */
+export function UploadIntro() {
+  const limitLabel = formatBytes(MAX_SNAP_UPLOAD_BINARY_BYTES);
+  return (
+    <Container>
+      <Box>
+        <Heading>Before you choose a file</Heading>
+        <Banner severity="danger" title="Hard size limit">
+          <Text>
+            {`MetaMask reads the entire file into the extension as soon as you confirm the picker — before Beesnap runs. Files over about ${limitLabel} are not safe here: they can pass the OS dialog then exceed the browser's ~64 MB extension message limit, which freezes or breaks the Snap until you reload MetaMask.`}
+          </Text>
+        </Banner>
+        <Text>
+          {`Use only files up to ${limitLabel} on the next screen. For bigger data, upload with swarm/bee tools against your node instead of this Snap.`}
+        </Text>
+      </Box>
+      <Footer>
+        <Button name={NAV_EVENTS.HOME}>Back</Button>
+        <Button name={UPLOAD_EVENTS.PROCEED_TO_PICKER}>Continue to file picker</Button>
+      </Footer>
+    </Container>
+  );
+}
+
 // ── Form screen ──────────────────────────────────────────────────────────────
 
 export interface UploadFormProps {
@@ -136,10 +176,16 @@ export interface UploadFormProps {
    * itself is held by the framework in form state — we don't pass it here.
    */
   selected?: { name: string; size: number; contentType: string };
+  /**
+   * User picked a file over `MAX_SNAP_UPLOAD_BINARY_BYTES` — show error and
+   * offer "Choose another file" instead of Upload until they reset.
+   */
+  fileSizeRejected?: { name: string; size: number };
 }
 
 export function UploadForm(props: UploadFormProps) {
-  const { stamps, registryError, selected } = props;
+  const { stamps, registryError, selected, fileSizeRejected } = props;
+  const limitLabel = formatBytes(MAX_SNAP_UPLOAD_BINARY_BYTES);
 
   if (registryError) {
     return (
@@ -184,6 +230,22 @@ export function UploadForm(props: UploadFormProps) {
           node stores the data.
         </Text>
 
+        <Banner severity="info" title="Maximum file size">
+          <Text>
+            MetaMask can only move about {limitLabel} per file through the Snap
+            (browser limit). For larger files, split the data or upload outside
+            the wallet.
+          </Text>
+        </Banner>
+
+        {fileSizeRejected ? (
+          <Banner severity="danger" title="File is too large">
+            <Text>
+              {`${fileSizeRejected.name} (${formatBytes(fileSizeRejected.size)}) exceeds the ${limitLabel} limit for Snap uploads. If MetaMask stopped responding, reload the extension or use "Choose another file" below.`}
+            </Text>
+          </Banner>
+        ) : null}
+
         {/*
           Form wraps the inputs purely so the framework keeps their values in
           interface state. The actual "Upload" button lives in the Footer
@@ -202,7 +264,14 @@ export function UploadForm(props: UploadFormProps) {
             </Dropdown>
           </Field>
 
-          <Field label="File">
+          <Field
+            label={`File (max ${limitLabel})`}
+            error={
+              fileSizeRejected
+                ? 'Pick a smaller file or reset — large files can crash MetaMask before this Snap runs.'
+                : undefined
+            }
+          >
             {/* No `accept` prop = accept any file type. The SDK treats each
                 entry in `accept` as a literal MIME or extension match, so a
                 wildcard MIME pattern would silently reject every real file
@@ -236,7 +305,11 @@ export function UploadForm(props: UploadFormProps) {
       </Box>
       <Footer>
         <Button name={NAV_EVENTS.HOME}>Back</Button>
-        <Button name={UPLOAD_EVENTS.SUBMIT}>Upload</Button>
+        {fileSizeRejected ? (
+          <Button name={UPLOAD_EVENTS.RESET_PICKER}>Choose another file</Button>
+        ) : (
+          <Button name={UPLOAD_EVENTS.SUBMIT}>Upload</Button>
+        )}
       </Footer>
     </Container>
   );
@@ -383,6 +456,15 @@ export async function runUpload(opts: {
   isWebsite: boolean;
 }): Promise<UploadDoneProps> {
   try {
+    const approxBytes = approxDecodedBytesFromBase64(opts.base64);
+    if (approxBytes > MAX_SNAP_UPLOAD_BINARY_BYTES) {
+      return {
+        success: false,
+        filename: opts.filename,
+        errorMessage: `This file is about ${formatBytes(approxBytes)} after decoding, which exceeds the ${formatBytes(MAX_SNAP_UPLOAD_BINARY_BYTES)} limit enforced by the MetaMask / Snap message size cap.`,
+      };
+    }
+
     const state = await getState();
     const beeApiUrl = state.settings.beeApiUrl ?? DEFAULT_BEE_API_URL;
     const uploaderAddress = await getBeesnapAddress();
@@ -391,6 +473,13 @@ export async function runUpload(opts: {
     const signature = await signMessage(messageToSign);
 
     const bytes = base64ToBytes(opts.base64);
+    if (bytes.length > MAX_SNAP_UPLOAD_BINARY_BYTES) {
+      return {
+        success: false,
+        filename: opts.filename,
+        errorMessage: `File is ${formatBytes(bytes.length)}; maximum for Snap uploads is ${formatBytes(MAX_SNAP_UPLOAD_BINARY_BYTES)}.`,
+      };
+    }
 
     const outcome = await uploadFile({
       beeApiUrl,
@@ -457,11 +546,25 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+/** Strip data-URL prefix and return raw base64 payload. */
+function rawBase64Payload(b64: string): string {
+  const idx = b64.indexOf(',');
+  return idx >= 0 ? b64.slice(idx + 1) : b64;
+}
+
+/** Upper bound on decoded byte length without allocating the full buffer. */
+function approxDecodedBytesFromBase64(b64: string): number {
+  const raw = rawBase64Payload(b64);
+  const len = raw.length;
+  const pad =
+    len >= 2 && raw[len - 2] === '=' ? 2 : len >= 1 && raw[len - 1] === '=' ? 1 : 0;
+  return Math.max(0, Math.floor((len * 3) / 4) - pad);
+}
+
 /** Decode a base64 string to a Uint8Array. atob is available inside Snap. */
 function base64ToBytes(b64: string): Uint8Array {
   // FileInput sometimes returns "data:<mime>;base64,...." — strip prefix.
-  const idx = b64.indexOf(',');
-  const cleaned = idx >= 0 ? b64.slice(idx + 1) : b64;
+  const cleaned = rawBase64Payload(b64);
   const binary = atob(cleaned);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {

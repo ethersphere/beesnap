@@ -88,6 +88,13 @@ export function describeError(err: unknown): string {
     // MetaMask wraps RPC errors with .data.message — surface that when present.
     const data = (err as any).data;
     if (data?.message) return String(data.message);
+    const cause = (err as any).cause;
+    if (cause) {
+      const inner = describeError(cause);
+      if (inner && inner !== 'Unknown error') {
+        return `${err.message || err.toString()} (${inner})`;
+      }
+    }
     return err.message || err.toString();
   }
   try {
@@ -95,4 +102,19 @@ export function describeError(err: unknown): string {
   } catch {
     return String(err);
   }
+}
+
+/**
+ * True when `err` looks like Chromium's extension messaging size limit
+ * (MetaMask → Snap payloads), so we can show a targeted recovery message.
+ */
+export function isLikelyExtensionMessageSizeError(err: unknown): boolean {
+  const msg = describeError(err).toLowerCase();
+  return (
+    msg.includes('64mib') ||
+    msg.includes('64 mib') ||
+    msg.includes('maximum allowed size') ||
+    msg.includes('message exceeded') ||
+    msg.includes('exceeded maximum')
+  );
 }
