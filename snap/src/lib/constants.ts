@@ -12,27 +12,26 @@
 /**
  * Default Bee API URL. The Snap can talk to either:
  *
- *  1. A local Bee node directly (e.g. http://localhost:1633). Simplest and
- *     what we default to. Requires the Bee node to be started with
- *     CORS enabled for the Snap's origin (which is `null`):
+ *  1. A public Bee API proxy (https://beeport.xyz) — default. Wraps a Bee node
+ *     behind nginx and signature-verification middleware (see backend/index.js).
+ *     The proxy expects our custom auth headers (x-upload-signed-message etc.)
+ *     and a matching CORS allowlist.
+ *
+ *  2. A local Bee node directly (e.g. http://localhost:1633). Set in Settings
+ *     for development. Requires CORS for the Snap origin (`null`):
  *         bee start --cors-allowed-origins "null,*"
  *     or in bee.yaml:
  *         cors-allowed-origins:
  *           - "null"
  *           - "*"
  *
- *  2. A public Bee API proxy (e.g. https://beeport.xyz) — an endpoint that
- *     wraps a Bee node behind nginx and a signature-verification middleware
- *     (see backend/index.js). The proxy requires our custom auth headers
- *     (x-upload-signed-message etc.) and the corresponding CORS allowlist.
- *
- * The Snap auto-detects which mode based on URL — if the URL contains
- * "localhost" or "127.0.0.1" we go direct (no auth headers); otherwise we
- * include the auth headers for the proxy.
+ * The Snap auto-detects which mode from the URL — if it contains "localhost"
+ * or "127.0.0.1" we go direct (no auth headers); otherwise we send the proxy
+ * auth headers.
  *
  * Override in Settings.
  */
-export const DEFAULT_BEE_API_URL = 'http://localhost:1633';
+export const DEFAULT_BEE_API_URL = 'https://beeport.xyz';
 
 /** Public Bee gateway used for hyperlinks to uploaded references. */
 export const BEE_GATEWAY_URL = 'https://bzz.link/bzz/';
