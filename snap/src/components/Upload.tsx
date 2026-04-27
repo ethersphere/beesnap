@@ -179,8 +179,9 @@ export function UploadForm(props: UploadFormProps) {
       <Box>
         <Heading>Upload a file</Heading>
         <Text>
-          Pick which storage to pay with and choose a file. The Snap signs an
-          authentication message, then hands the file to your Bee node.
+          Choose which postage batch (by its ID) should pay for the upload, then
+          select a file. The Snap signs an authentication message, then your Bee
+          node stores the data.
         </Text>
 
         {/*
@@ -191,11 +192,11 @@ export function UploadForm(props: UploadFormProps) {
           `snap_getInterfaceState[UPLOAD_EVENTS.FORM]`.
         */}
         <Form name={UPLOAD_EVENTS.FORM}>
-          <Field label="Pay with storage">
+          <Field label="Storage batch">
             <Dropdown name={UPLOAD_FIELDS.STAMP}>
               {stamps.map((s) => (
                 <Option value={s.batchId}>
-                  {`${shortHash(s.batchIdHex, 8, 6)} · depth ${s.depth}`}
+                  {shortHash(s.batchIdHex, 8, 6)}
                 </Option>
               ))}
             </Dropdown>

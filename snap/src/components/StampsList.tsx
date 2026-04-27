@@ -29,7 +29,7 @@ import {
   StampInfo,
   type StampFetchDebug,
 } from '../lib/bee';
-import { DEFAULT_BEE_API_URL } from '../lib/constants';
+import { DEFAULT_BEE_API_URL, STORAGE_OPTIONS } from '../lib/constants';
 import { getState } from '../lib/state';
 import { describeError, formatTTL, getStampUsagePercent } from '../lib/utils';
 import { NAV_EVENTS } from './Home';
@@ -281,6 +281,8 @@ export function StampsList(props: StampsListProps) {
     const info = entry?.info ?? null;
     const usagePct = info ? getStampUsagePercent(info.utilization, info.depth) : null;
     const ttl = info ? formatTTL(info.batchTTL) : 'unknown';
+    const sizeLabel =
+      STORAGE_OPTIONS.find(o => o.depth === b.depth)?.size ?? '—';
     return (
       <Box key={b.batchId}>
         <Heading size="sm">{`Storage #${String(n)}`}</Heading>
@@ -289,7 +291,7 @@ export function StampsList(props: StampsListProps) {
             <Copyable value={b.batchId} />
           </Row>
           <Row label="Capacity">
-            <Text>{`depth ${b.depth}`}</Text>
+            <Text>{sizeLabel}</Text>
           </Row>
           <Row label="Used">
             <Text>{usagePct === null ? 'unavailable' : `${usagePct.toFixed(2)}%`}</Text>

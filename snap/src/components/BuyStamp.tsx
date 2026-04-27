@@ -2,7 +2,7 @@
  * Buy a new postage stamp.
  *
  * Flow (each phase is a distinct snap_updateInterface tree):
- *   1. Form     — pick source chain, depth, duration. Submit → quote.
+ *   1. Form     — pick source chain, capacity, duration. Submit → quote.
  *   2. Quote    — show BZZ amount, fee breakdown, ETA. Confirm → execute.
  *   3. Progress — text status as each Relay step is signed and confirmed.
  *   4. Done     — success or error summary. Back returns to Home.
@@ -90,7 +90,7 @@ export function BuyStampForm() {
           <Field label="Storage capacity">
             <Dropdown name={BUY_FIELDS.DEPTH}>
               {STORAGE_OPTIONS.map(o => (
-                <Option value={String(o.depth)}>{`${o.size} (depth ${o.depth})`}</Option>
+                <Option value={String(o.depth)}>{o.size}</Option>
               ))}
             </Dropdown>
           </Field>
@@ -231,7 +231,7 @@ export function BuyStampQuote(p: PendingPurchase) {
             <Text>{p.chainName}</Text>
           </Row>
           <Row label="Capacity">
-            <Text>{`${p.depthSize} (depth ${p.depth})`}</Text>
+            <Text>{`${p.depthSize} (ID ${p.depth})`}</Text>
           </Row>
           <Row label="Duration">
             <Text>{p.daysDisplay}</Text>

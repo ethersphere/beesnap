@@ -91,23 +91,31 @@ export default function InstallPage() {
       {IS_LOCAL_SNAP ? (
         <div className="install-prereq" role="note">
           <p>
-            <strong>Snap on port 8080:</strong> at the repo root run{' '}
-            <code>npm run snap:dev</code> and keep it open. That command runs
-            the Snaps CLI in watch mode — it <em>is</em> the HTTP server for the
-            Snap; you do <em>not</em> also need <code>npm run serve</code> unless
-            you intentionally switch to a pre-built bundle (after{' '}
-            <code>cd snap &amp;&amp; npm run build</code> use{' '}
-            <code>npm run snap:serve</code> instead, not both on the same port).
+            <strong>1. Snap bundle on port 8080</strong> — in one terminal, from
+            the repo root, run <code>npm run snap:dev</code> and leave it running.
+            That starts the dev server MetaMask uses to load the Snap (with rebuilds
+            on change). You do <em>not</em> need to run a separate{' '}
+            <code>serve</code> process for this workflow.
           </p>
           <p>
-            <strong>Install page on port 3000:</strong> in another terminal run{' '}
-            <code>npm run dev</code> (root Next.js app) so you can open this page
-            and click Install Snap. MetaMask still fetches the bundle from 8080;
-            the Next app does not host the Snap.
+            <strong>When to use a static serve instead</strong> — if you run{' '}
+            <code>cd snap &amp;&amp; npm run build</code> and then serve the
+            result, use <code>npm run snap:serve</code> (from the root scripts),
+            and stop the other 8080 process so only one is bound to the port. Do
+            not run <code>snap:dev</code> and <code>snap:serve</code> on the
+            same port at once.
           </p>
           <p>
-            If <code>http://localhost:8080</code> does not load in a browser
-            tab, you will get &quot;executor failed to initialize&quot;.
+            <strong>2. This install page on port 3000</strong> — in a second
+            terminal, run <code>npm run dev</code> at the repo root, open this
+            site, and click <strong>Install Snap</strong>. The Next.js app is only
+            the installer; MetaMask still downloads the Snap from{' '}
+            <code>http://localhost:8080</code>, not from port 3000.
+          </p>
+          <p>
+            <strong>Sanity check:</strong> open <code>http://localhost:8080</code> in
+            a browser. If that URL does not load, installation may fail with
+            &quot;executor failed to initialize&quot;.
           </p>
         </div>
       ) : null}
