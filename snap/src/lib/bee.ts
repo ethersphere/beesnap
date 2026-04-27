@@ -67,7 +67,7 @@ export interface StampFetchOutcome {
  */
 export async function fetchStampInfo(
   beeApiUrl: string,
-  batchId: string,
+  batchId: string
 ): Promise<StampFetchOutcome> {
   const id = batchId.startsWith('0x') ? batchId.slice(2) : batchId;
   const url = `${beeApiUrl}/stamps/${id}`;
@@ -87,7 +87,7 @@ export async function fetchStampInfo(
 
   const contentType = res.headers.get('content-type');
   console.log(
-    `[bee] ${url} → ${res.status} ${res.statusText} (content-type: ${contentType ?? 'none'})`,
+    `[bee] ${url} → ${res.status} ${res.statusText} (content-type: ${contentType ?? 'none'})`
   );
 
   let bodyText: string;
@@ -119,7 +119,7 @@ export async function fetchStampInfo(
 
   if (!res.ok) {
     console.warn(
-      `[bee] non-OK status ${res.status} for ${url}; treating as "stamp not yet visible to Bee"`,
+      `[bee] non-OK status ${res.status} for ${url}; treating as "stamp not yet visible to Bee"`
     );
     return { info: null, debug };
   }
@@ -131,7 +131,7 @@ export async function fetchStampInfo(
     console.error(
       `[bee] OK status but body was not valid JSON for ${url}:`,
       err,
-      bodyText.slice(0, 200),
+      bodyText.slice(0, 200)
     );
     return { info: null, debug };
   }
@@ -151,9 +151,7 @@ export interface NodeWalletProbe {
   debug: StampFetchDebug;
 }
 
-export async function fetchNodeWalletAddress(
-  beeApiUrl: string,
-): Promise<NodeWalletProbe> {
+export async function fetchNodeWalletAddress(beeApiUrl: string): Promise<NodeWalletProbe> {
   const url = `${beeApiUrl}/wallet`;
   console.log(`[bee] GET ${url}`);
 
@@ -253,9 +251,7 @@ export type UploadOutcome =
  * signature doesn't recover to `uploaderAddress` or that address isn't the
  * batch payer; in either case, the response body has the JSON reason.
  */
-export async function uploadFile(
-  params: UploadParams,
-): Promise<UploadOutcome> {
+export async function uploadFile(params: UploadParams): Promise<UploadOutcome> {
   const {
     beeApiUrl,
     batchId,
@@ -284,8 +280,7 @@ export async function uploadFile(
   // straight to a local Bee, leave them off entirely. Same heuristic as the
   // v1 dApp's FileUploadUtils.ts:
   //   const isLocalhost = beeApiUrl.includes('localhost') || beeApiUrl.includes('127.0.0.1');
-  const isLocalhost =
-    beeApiUrl.includes('localhost') || beeApiUrl.includes('127.0.0.1');
+  const isLocalhost = beeApiUrl.includes('localhost') || beeApiUrl.includes('127.0.0.1');
   if (!isLocalhost) {
     headers['x-upload-signed-message'] = signature;
     headers['x-uploader-address'] = uploaderAddress;
@@ -305,7 +300,7 @@ export async function uploadFile(
   // ArrayBuffer is what `fetch` accepts and what the Snap sandbox provides.
   const buf = bytes.buffer.slice(
     bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
+    bytes.byteOffset + bytes.byteLength
   ) as ArrayBuffer;
 
   let res: Response;
@@ -331,7 +326,7 @@ export async function uploadFile(
 
   console.log(
     `[bee] ${url} → ${res.status} ${res.statusText} (content-type: ${responseContentType ?? 'none'}) body:`,
-    bodyText.slice(0, 500),
+    bodyText.slice(0, 500)
   );
 
   const debug: StampFetchDebug = {

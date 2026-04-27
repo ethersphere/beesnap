@@ -13,22 +13,16 @@ export const metadata: Metadata = {
     icon: './favicon.png',
     shortcut: './favicon.png',
   },
+  openGraph: {
+    title: 'Beesnap',
+    description:
+      'Swarm bee snap integration with MetaMask Snaps — postage stamps and uploads from inside your wallet.',
+  },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <meta property="og:title" content="Beesnap" />
-        <meta
-          property="og:description"
-          content="Swarm bee snap integration with MetaMask Snaps — postage stamps and uploads from inside your wallet."
-        />
-      </head>
       <body>
         <main className="install-shell">{children}</main>
       </body>

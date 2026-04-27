@@ -7,10 +7,7 @@
  * the backend proxy in `bee.ts`.
  */
 
-import {
-  decodeFunctionResult,
-  encodeFunctionData,
-} from 'viem';
+import { decodeFunctionResult, encodeFunctionData } from 'viem';
 import { REGISTRY_ABI } from './abis';
 import { GNOSIS_CUSTOM_REGISTRY_ADDRESS } from './constants';
 import { gnosisEthCall } from './ethereum';
@@ -47,7 +44,7 @@ export async function getOwnerBatches(owner: string): Promise<RegistryBatch[]> {
   });
 
   // viem returns the tuple array as `readonly { ... }[]`. Convert + normalise.
-  return (decoded as readonly any[]).map((b) => ({
+  return (decoded as readonly any[]).map(b => ({
     batchId: b.batchId as `0x${string}`,
     totalAmount: BigInt(b.totalAmount),
     normalisedBalance: BigInt(b.normalisedBalance),

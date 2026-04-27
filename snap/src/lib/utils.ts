@@ -1,9 +1,4 @@
-import {
-  encodeAbiParameters,
-  keccak256,
-  parseAbiParameters,
-  toHex,
-} from 'viem';
+import { encodeAbiParameters, keccak256, parseAbiParameters, toHex } from 'viem';
 
 /**
  * Calculates the deterministic batch ID from (sender, nonce). Matches the
@@ -11,10 +6,10 @@ import {
  * resolves to the same id the registry stores under.
  */
 export function readBatchId(nonce: `0x${string}`, sender: string): string {
-  const encoded = encodeAbiParameters(
-    parseAbiParameters(['address', 'bytes32']),
-    [sender as `0x${string}`, nonce],
-  );
+  const encoded = encodeAbiParameters(parseAbiParameters(['address', 'bytes32']), [
+    sender as `0x${string}`,
+    nonce,
+  ]);
   return keccak256(encoded).slice(2);
 }
 
@@ -59,11 +54,7 @@ export function formatTTL(ttlSeconds: number): string {
 }
 
 /** Compute the real used capacity percentage from raw utilization + depth. */
-export function getStampUsagePercent(
-  utilization: number,
-  depth: number,
-  bucketDepth = 16,
-): number {
+export function getStampUsagePercent(utilization: number, depth: number, bucketDepth = 16): number {
   if (!Number.isFinite(utilization) || !Number.isFinite(depth)) return 0;
   return (utilization / Math.pow(2, depth - bucketDepth)) * 100;
 }

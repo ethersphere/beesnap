@@ -27,9 +27,7 @@ import { UploadRecord } from '../lib/state';
 import { formatDateMs, shortHash } from '../lib/utils';
 import { NAV_EVENTS } from './Home';
 
-export function UploadsList(props: {
-  uploads: UploadRecord[];
-}) {
+export function UploadsList(props: { uploads: UploadRecord[] }) {
   const { uploads } = props;
 
   if (uploads.length === 0) {
@@ -38,8 +36,8 @@ export function UploadsList(props: {
         <Box>
           <Heading>My uploads</Heading>
           <Text>
-            No uploads from this Snap yet. Once you upload a file, it'll show up
-            here with its reference and gateway link.
+            No uploads from this Snap yet. Once you upload a file, it'll show up here with its
+            reference and gateway link.
           </Text>
         </Box>
         <Footer>
@@ -55,14 +53,12 @@ export function UploadsList(props: {
       <Box>
         <Heading>My uploads</Heading>
         <Text>
-          {String(uploads.length)}{' '}
-          {uploads.length === 1 ? 'upload' : 'uploads'} on this account.
+          {String(uploads.length)} {uploads.length === 1 ? 'upload' : 'uploads'} on this account.
         </Text>
 
         {uploads.map((u, i) => {
           const url = `${BEE_GATEWAY_URL}${u.reference}`;
-          const expires =
-            u.expiryDate > 0 ? formatDateMs(u.expiryDate) : 'unknown';
+          const expires = u.expiryDate > 0 ? formatDateMs(u.expiryDate) : 'unknown';
           return (
             <Section key={`u-${i}`}>
               <Heading size="sm">{u.filename || 'Untitled'}</Heading>

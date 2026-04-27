@@ -30,10 +30,7 @@ import { Box, Heading, Text } from '@metamask/snaps-sdk/jsx';
 
 import { getBeesnapAddress } from './lib/wallet';
 import { getNativeBalance } from './lib/ethereum';
-import {
-  fetchNodeWalletAddress,
-  syncStoredNodeAddressWithWallet,
-} from './lib/bee';
+import { fetchNodeWalletAddress, syncStoredNodeAddressWithWallet } from './lib/bee';
 import { DEFAULT_BEE_API_URL, SOURCE_CHAINS } from './lib/constants';
 
 /**
@@ -114,13 +111,13 @@ export const onInstall: OnInstallHandler = async () => {
         <Box>
           <Heading>Welcome to Beesnap</Heading>
           <Text>
-            Beesnap derives a dedicated account from your secret recovery
-            phrase. Send xDAI on Gnosis to it before buying stamps:
+            Beesnap derives a dedicated account from your secret recovery phrase. Send xDAI on
+            Gnosis to it before buying stamps:
           </Text>
           <Text>{address}</Text>
           <Text>
-            Open the Beesnap tab on the left of MetaMask any time to view this
-            address again, see your balance, buy stamps, and upload files.
+            Open the Beesnap tab on the left of MetaMask any time to view this address again, see
+            your balance, buy stamps, and upload files.
           </Text>
         </Box>
       ),
@@ -137,7 +134,7 @@ async function loadHomeProps() {
   // Remember the address so it shows up consistently across screens.
   await rememberAccount(beesnapAddress);
   const chainBalances: HomeChainBalance[] = await Promise.all(
-    SOURCE_CHAINS.map(async (c) => {
+    SOURCE_CHAINS.map(async c => {
       try {
         const wei = await getNativeBalance(beesnapAddress, c.id);
         return { chainId: c.id, name: c.name, symbol: c.symbol, wei };
@@ -145,7 +142,7 @@ async function loadHomeProps() {
         console.warn(`[home] native balance chain ${c.id} failed:`, err);
         return { chainId: c.id, name: c.name, symbol: c.symbol, wei: null };
       }
-    }),
+    })
   );
   return { beesnapAddress, chainBalances };
 }
@@ -215,9 +212,12 @@ export const onUserInput: OnUserInputHandler = async ({ id, event, context }) =>
       // "Selected: …" banner. We use the SAME field names, so the file the
       // user just picked is preserved in form state by the framework — the
       // re-render just adds extra UI alongside it.
-      const file = (event as any).file as
-        | { name: string; size: number; contentType: string; contents: string }
-        | null;
+      const file = (event as any).file as {
+        name: string;
+        size: number;
+        contentType: string;
+        contents: string;
+      } | null;
       if (file) {
         const account = await getBeesnapAddress();
         const data = await loadUsableStamps(account);
@@ -237,7 +237,7 @@ export const onUserInput: OnUserInputHandler = async ({ id, event, context }) =>
               contentType: file.contentType,
             }}
           />,
-          { uploadInitialBatchId: uploadInitialBatchId ?? '' },
+          { uploadInitialBatchId: uploadInitialBatchId ?? '' }
         );
       }
       return;
@@ -263,7 +263,7 @@ export const onUserInput: OnUserInputHandler = async ({ id, event, context }) =>
 async function handleButton(
   id: string,
   name: string,
-  context: Record<string, any> | null,
+  context: Record<string, any> | null
 ): Promise<void> {
   // Any navigation cancels whatever poll might be running for this interface
   // id. The running poll's next iteration will see a different gen (or none)
@@ -282,8 +282,7 @@ async function handleButton(
     } catch {
       return;
     }
-    const prev =
-      (context?.otherNodeGroupOpen as boolean | undefined) ?? false;
+    const prev = (context?.otherNodeGroupOpen as boolean | undefined) ?? false;
     const next = !prev;
     await update(id, <StampsList {...data} otherNodeGroupOpen={next} />, {
       stamps: serializeStampsForContext(data),
@@ -357,7 +356,8 @@ async function handleButton(
           ok: false,
           reason: probe.debug.networkError
             ? probe.debug.networkError
-            : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() || 'no response',
+            : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() ||
+              'no response',
         };
     await update(
       id,
@@ -365,7 +365,7 @@ async function handleButton(
         beeApiUrl={state.settings.beeApiUrl ?? ''}
         nodeAddress={state.settings.nodeAddress ?? ''}
         liveDefaultNode={liveDefaultNode}
-      />,
+      />
     );
     return;
   }
@@ -377,9 +377,7 @@ async function handleButton(
     await setState(state);
     await syncStoredNodeAddressWithWallet();
     const after = await getState();
-    const probe = await fetchNodeWalletAddress(
-      after.settings.beeApiUrl || DEFAULT_BEE_API_URL,
-    );
+    const probe = await fetchNodeWalletAddress(after.settings.beeApiUrl || DEFAULT_BEE_API_URL);
     const liveDefaultNode: SettingsFormProps['liveDefaultNode'] = probe.address
       ? { ok: true, address: probe.address }
       : {
@@ -396,7 +394,7 @@ async function handleButton(
         nodeAddress={after.settings.nodeAddress ?? ''}
         liveDefaultNode={liveDefaultNode}
         savedJustNow
-      />,
+      />
     );
     return;
   }
@@ -432,18 +430,15 @@ async function handleButton(
         message="Preparing transactions…"
         predictedBatchId={pending.predictedBatchId}
       />,
-      { pending },
+      { pending }
     );
 
     // Run the purchase. Pump status updates back into the same interface.
     const onStatus = async (msg: string): Promise<void> => {
       await update(
         id,
-        <BuyStampProgress
-          message={msg}
-          predictedBatchId={pending.predictedBatchId}
-        />,
-        { pending },
+        <BuyStampProgress message={msg} predictedBatchId={pending.predictedBatchId} />,
+        { pending }
       );
     };
     const result: PurchaseResult = await runPurchase(pending, onStatus);
@@ -461,14 +456,9 @@ async function handleButton(
       typeof uploadInitialBatchIdRaw === 'string' && uploadInitialBatchIdRaw.length > 0
         ? uploadInitialBatchIdRaw
         : '';
-    await update(
-      id,
-      <UploadForm
-        {...data}
-        initialBatchId={uploadInitialBatchId || undefined}
-      />,
-      { uploadInitialBatchId },
-    );
+    await update(id, <UploadForm {...data} initialBatchId={uploadInitialBatchId || undefined} />, {
+      uploadInitialBatchId,
+    });
     return;
   }
   if (name === UPLOAD_EVENTS.SUBMIT) {
@@ -492,7 +482,7 @@ async function handleForm(
   id: string,
   name: string,
   values: Record<string, any>,
-  _context: Record<string, any> | null,
+  _context: Record<string, any> | null
 ): Promise<void> {
   // Submitting any form is a navigation — cancel the running poll, if any.
   await setActivePoll(id, null);
@@ -508,9 +498,7 @@ async function handleForm(
     const beeRes = validateBeeApiUrl(beeRaw);
     if ('error' in beeRes) {
       const state = await getState();
-      const probe = await fetchNodeWalletAddress(
-        state.settings.beeApiUrl || DEFAULT_BEE_API_URL,
-      );
+      const probe = await fetchNodeWalletAddress(state.settings.beeApiUrl || DEFAULT_BEE_API_URL);
       const liveDefaultNode: SettingsFormProps['liveDefaultNode'] = probe.address
         ? { ok: true, address: probe.address }
         : {
@@ -527,7 +515,7 @@ async function handleForm(
           nodeAddress={state.settings.nodeAddress ?? ''}
           validationError={beeRes.error}
           liveDefaultNode={liveDefaultNode}
-        />,
+        />
       );
       return;
     }
@@ -554,8 +542,7 @@ async function handleForm(
         ok: false,
         reason: probe.debug.networkError
           ? `network: ${probe.debug.networkError}`
-          : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() ||
-            'no response',
+          : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() || 'no response',
         from: `${probeUrl}/wallet`,
       };
     }
@@ -575,7 +562,7 @@ async function handleForm(
                 reason: walletProbe && !walletProbe.ok ? walletProbe.reason : 'unreachable',
               }
         }
-      />,
+      />
     );
     return;
   }
@@ -590,11 +577,7 @@ async function handleForm(
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Re-render an existing interface, optionally replacing context. */
-async function update(
-  id: string,
-  ui: any,
-  context?: Record<string, any>,
-): Promise<void> {
+async function update(id: string, ui: any, context?: Record<string, any>): Promise<void> {
   const params: any = { id, ui };
   if (context) params.context = context;
   await snap.request({
@@ -608,10 +591,7 @@ async function update(
  * from the Footer-button code path (which reads form state via
  * `snap_getInterfaceState`).
  */
-async function runUploadFromForm(
-  id: string,
-  formValues: Record<string, any>,
-): Promise<void> {
+async function runUploadFromForm(id: string, formValues: Record<string, any>): Promise<void> {
   const batchId = String(formValues[UPLOAD_FIELDS.STAMP] ?? '');
   const file = formValues[UPLOAD_FIELDS.FILE] as
     | { name: string; contentType: string; size: number; contents: string }
@@ -641,10 +621,7 @@ async function runUploadFromForm(
  * both from the form-submit code path and from the Footer-button code path
  * (which reads form state via snap_getInterfaceState).
  */
-async function runBuyQuote(
-  id: string,
-  formValues: Record<string, any>,
-): Promise<void> {
+async function runBuyQuote(id: string, formValues: Record<string, any>): Promise<void> {
   const account = await getBeesnapAddress();
   const chainId = Number(formValues[BUY_FIELDS.CHAIN]);
   const depth = Number(formValues[BUY_FIELDS.DEPTH]);
@@ -663,11 +640,7 @@ async function runBuyQuote(
   if ('error' in result) {
     await update(
       id,
-      <BuyStampDone
-        success={false}
-        predictedBatchId=""
-        errorMessage={result.error}
-      />,
+      <BuyStampDone success={false} predictedBatchId="" errorMessage={result.error} />
     );
     return;
   }
@@ -703,7 +676,7 @@ const POLL_MAX_ATTEMPTS = 4;
 async function runStampsPoll(
   id: string,
   account: string,
-  initial: StampsLoadResult,
+  initial: StampsLoadResult
 ): Promise<void> {
   const gen = Date.now();
   await setActivePoll(id, gen);
@@ -753,5 +726,5 @@ async function runStampsPoll(
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise(r => setTimeout(r, ms));
 }

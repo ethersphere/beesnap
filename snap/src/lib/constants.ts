@@ -52,34 +52,28 @@ export const GNOSIS_RPCS = [
 // ── Contract addresses on Gnosis ──────────────────────────────────────────────
 
 /** Custom registry that maps batchId → owner. Used for both batch ownership lookups and listing a user's stamps. */
-export const GNOSIS_CUSTOM_REGISTRY_ADDRESS =
-  '0x5EBfBeFB1E88391eFb022d5d33302f50a46bF4f3';
+export const GNOSIS_CUSTOM_REGISTRY_ADDRESS = '0x5EBfBeFB1E88391eFb022d5d33302f50a46bF4f3';
 
 export const GNOSIS_BZZ_ADDRESS = '0xdBF3Ea6F5beE45c02255B2c26a16F300502F68da';
 
-export const GNOSIS_WXDAI_ADDRESS =
-  '0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d';
+export const GNOSIS_WXDAI_ADDRESS = '0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d';
 
 export const GNOSIS_STAMP_ADDRESS = '0x45a1502382541Cd610CC9068e88727426b696293';
 
-export const GNOSIS_PRICE_ORACLE_ADDRESS =
-  '0x47EeF336e7fE5bED98499A4696bce8f28c1B0a8b';
+export const GNOSIS_PRICE_ORACLE_ADDRESS = '0x47EeF336e7fE5bED98499A4696bce8f28c1B0a8b';
 
 /**
  * Native Circle USDC on Gnosis. This is what Relay routes to from any source
  * chain; SushiSwapStampsRouter then swaps USDC → BZZ and creates the stamp atomically.
  */
-export const RELAY_BRIDGE_TOKEN_ON_GNOSIS =
-  '0x2a22f9c3b484c3629090feed35f17ff8f88f76f0';
+export const RELAY_BRIDGE_TOKEN_ON_GNOSIS = '0x2a22f9c3b484c3629090feed35f17ff8f88f76f0';
 export const RELAY_BRIDGE_TOKEN_DECIMALS = 6;
 export const RELAY_BRIDGE_TOKEN_SYMBOL = 'USDC';
 
-export const SUSHI_STAMPS_ROUTER_ADDRESS =
-  '0xf244cC25EAD03a99de8B407A3237aaf54D1b779C';
+export const SUSHI_STAMPS_ROUTER_ADDRESS = '0xf244cC25EAD03a99de8B407A3237aaf54D1b779C';
 
 /** SushiSwap V3 factory on Gnosis (pool discovery for USDC → BZZ quotes). */
-export const SUSHI_FACTORY_ADDRESS =
-  '0xf78031cbca409f2fb6876bdfdbc1b2df24cf9bef';
+export const SUSHI_FACTORY_ADDRESS = '0xf78031cbca409f2fb6876bdfdbc1b2df24cf9bef';
 
 /**
  * Gnosis: minimum native xDAI on the Beesnap address to skip Relay `topupGas`
@@ -155,11 +149,7 @@ export type SourceChain = {
  * and receipts. Key must include every `SOURCE_CHAINS` id.
  */
 export const CHAIN_RPCS: Record<number, string[]> = {
-  100: [
-    'https://rpc.gnosischain.com',
-    'https://rpc.gnosis.gateway.fm',
-    'https://gnosis.drpc.org',
-  ],
+  100: ['https://rpc.gnosischain.com', 'https://rpc.gnosis.gateway.fm', 'https://gnosis.drpc.org'],
   1: ['https://eth.llamarpc.com', 'https://rpc.ankr.com/eth'],
   8453: ['https://mainnet.base.org', 'https://base.drpc.org'],
   42161: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum.drpc.org'],

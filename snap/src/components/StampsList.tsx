@@ -284,15 +284,14 @@ export function StampsList(props: StampsListProps) {
   const oneStorage = (
     v: BatchView,
     showItemWrongNodeBanner: boolean,
-    showUploadForThisNode: boolean,
+    showUploadForThisNode: boolean
   ) => {
     const { b, origIndex, entry } = v;
     const n = origIndex + 1;
     const info = entry?.info ?? null;
     const usagePct = info ? getStampUsagePercent(info.utilization, info.depth) : null;
     const ttl = info ? formatTTL(info.batchTTL) : 'unknown';
-    const sizeLabel =
-      STORAGE_OPTIONS.find(o => o.depth === b.depth)?.size ?? '—';
+    const sizeLabel = STORAGE_OPTIONS.find(o => o.depth === b.depth)?.size ?? '—';
     return (
       <Box key={b.batchId}>
         <Heading size="sm">{`Storage #${String(n)}`}</Heading>

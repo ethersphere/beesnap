@@ -45,9 +45,7 @@ export async function getBeesnapAccount(): Promise<PrivateKeyAccount> {
   })) as string;
 
   if (!entropyHex || typeof entropyHex !== 'string') {
-    throw new Error(
-      'snap_getEntropy returned no value. Is the manifest permission declared?',
-    );
+    throw new Error('snap_getEntropy returned no value. Is the manifest permission declared?');
   }
 
   // The result is a 0x-prefixed 32-byte hex string. Use it as a secp256k1

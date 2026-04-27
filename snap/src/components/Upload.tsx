@@ -32,10 +32,7 @@ import {
   Copyable,
   Link,
 } from '@metamask/snaps-sdk/jsx';
-import {
-  DEFAULT_BEE_API_URL,
-  BEE_GATEWAY_URL,
-} from '../lib/constants';
+import { DEFAULT_BEE_API_URL, BEE_GATEWAY_URL } from '../lib/constants';
 import {
   fetchStampInfo,
   fetchNodeWalletAddress,
@@ -95,7 +92,7 @@ export async function loadUsableStamps(account: string): Promise<{
   const currentNodeAddress = walletProbe.address;
 
   const enriched = await Promise.all(
-    batches.map(async (b) => {
+    batches.map(async b => {
       const idNoPrefix = b.batchId.slice(2);
 
       // If we know the current node and this stamp's nodeAddress doesn't
@@ -117,7 +114,7 @@ export async function loadUsableStamps(account: string): Promise<{
         utilization: info.utilization,
         usable: info.usable,
       } as UsableStamp;
-    }),
+    })
   );
 
   return {
@@ -157,9 +154,7 @@ export function UploadForm(props: UploadFormProps) {
   const { stamps, registryError, selected, initialBatchId } = props;
   const stampsOrdered = orderStampsForInitial(stamps, initialBatchId);
   const initialMissing =
-    Boolean(initialBatchId) &&
-    stamps.length > 0 &&
-    !stamps.some(s => s.batchId === initialBatchId);
+    Boolean(initialBatchId) && stamps.length > 0 && !stamps.some(s => s.batchId === initialBatchId);
 
   if (registryError) {
     return (
@@ -182,9 +177,7 @@ export function UploadForm(props: UploadFormProps) {
       <Container>
         <Box>
           <Heading>Upload a file</Heading>
-          <Text>
-            You don't have any usable storage yet. Buy some to start uploading.
-          </Text>
+          <Text>You don't have any usable storage yet. Buy some to start uploading.</Text>
         </Box>
         <Footer>
           <Button name={NAV_EVENTS.BUY}>Buy storage</Button>
@@ -199,17 +192,16 @@ export function UploadForm(props: UploadFormProps) {
       <Box>
         <Heading>Upload a file</Heading>
         <Text>
-          Choose which postage batch (by its ID) should pay for the upload, then
-          select a file. The Snap signs an authentication message, then your Bee
-          node stores the data.
+          Choose which postage batch (by its ID) should pay for the upload, then select a file. The
+          Snap signs an authentication message, then your Bee node stores the data.
         </Text>
 
         {initialMissing ? (
           <Banner severity="warning" title="That storage isn't ready here yet">
             <Text>
-              The batch you opened from My storage isn't in the usable list for this Bee
-              node — often it needs a minute after purchase, or Bee still syncing. Refresh
-              My storage, or pick another batch below.
+              The batch you opened from My storage isn't in the usable list for this Bee node —
+              often it needs a minute after purchase, or Bee still syncing. Refresh My storage, or
+              pick another batch below.
             </Text>
           </Banner>
         ) : null}
@@ -224,10 +216,8 @@ export function UploadForm(props: UploadFormProps) {
         <Form name={UPLOAD_EVENTS.FORM}>
           <Field label="Storage batch">
             <Dropdown name={UPLOAD_FIELDS.STAMP}>
-              {stampsOrdered.map((s) => (
-                <Option value={s.batchId}>
-                  {shortHash(s.batchIdHex, 8, 6)}
-                </Option>
+              {stampsOrdered.map(s => (
+                <Option value={s.batchId}>{shortHash(s.batchIdHex, 8, 6)}</Option>
               ))}
             </Dropdown>
           </Field>
@@ -258,9 +248,9 @@ export function UploadForm(props: UploadFormProps) {
 
         <Banner severity="info" title="No progress bar">
           <Text>
-            The Snap runtime can't show real upload progress. After you press
-            Upload, the screen will say "uploading…" until the Bee node
-            responds — that may take a while for large files.
+            The Snap runtime can't show real upload progress. After you press Upload, the screen
+            will say "uploading…" until the Bee node responds — that may take a while for large
+            files.
           </Text>
         </Banner>
       </Box>
@@ -284,8 +274,8 @@ export function UploadInFlight(props: { filename: string }) {
         </Text>
         <Banner severity="info" title="Don't close MetaMask">
           <Text>
-            We can't surface progress while the upload is in flight. This screen
-            updates only when the Bee node responds.
+            We can't surface progress while the upload is in flight. This screen updates only when
+            the Bee node responds.
           </Text>
         </Banner>
       </Box>
@@ -327,9 +317,7 @@ export function UploadDone(props: UploadDoneProps) {
             <Heading size="sm">Open in browser</Heading>
             {/* Show a short label rather than the full URL — bzz.link/bzz/<6chars>… —
                 while the link itself opens the full gateway URL. */}
-            <Link href={gatewayUrl}>
-              {`bzz.link/bzz/${shortHash(props.reference, 6, 4)}`}
-            </Link>
+            <Link href={gatewayUrl}>{`bzz.link/bzz/${shortHash(props.reference, 6, 4)}`}</Link>
           </Section>
         </Box>
         <Footer>
@@ -360,9 +348,7 @@ export function UploadDone(props: UploadDoneProps) {
             ) : (
               <Box>
                 <Row label="Status">
-                  <Text>
-                    {`${props.debug.status ?? '?'} ${props.debug.statusText ?? ''}`}
-                  </Text>
+                  <Text>{`${props.debug.status ?? '?'} ${props.debug.statusText ?? ''}`}</Text>
                 </Row>
                 {props.debug.contentType ? (
                   <Row label="Content-Type">
@@ -378,12 +364,10 @@ export function UploadDone(props: UploadDoneProps) {
             )}
             <Divider />
             <Text>
-              "Failed to fetch" with no status almost always means the Bee
-              proxy's CORS preflight rejected the request. Check that the
-              server's Access-Control-Allow-Headers includes
-              x-upload-signed-message, x-uploader-address, x-file-name,
-              x-message-content, swarm-postage-batch-id, swarm-pin,
-              swarm-deferred-upload, and swarm-collection.
+              "Failed to fetch" with no status almost always means the Bee proxy's CORS preflight
+              rejected the request. Check that the server's Access-Control-Allow-Headers includes
+              x-upload-signed-message, x-uploader-address, x-file-name, x-message-content,
+              swarm-postage-batch-id, swarm-pin, swarm-deferred-upload, and swarm-collection.
             </Text>
           </Section>
         ) : null}
@@ -449,10 +433,7 @@ export async function runUpload(opts: {
 
     // Pull stamp info to record an honest expiry date in our local history.
     const { info } = await fetchStampInfo(beeApiUrl, opts.batchId);
-    const expiryDate =
-      info && info.batchTTL > 0
-        ? Date.now() + info.batchTTL * 1000
-        : 0;
+    const expiryDate = info && info.batchTTL > 0 ? Date.now() + info.batchTTL * 1000 : 0;
 
     await addUpload(uploaderAddress, {
       reference: outcome.reference,

@@ -30,7 +30,7 @@ function rpcsForChain(chainId: number): string[] {
     return GNOSIS_RPCS;
   }
   throw new Error(
-    `No RPC list configured for chainId ${chainId}. Add it to CHAIN_RPCS in constants.ts.`,
+    `No RPC list configured for chainId ${chainId}. Add it to CHAIN_RPCS in constants.ts.`
   );
 }
 
@@ -40,10 +40,7 @@ function rpcsForChain(chainId: number): string[] {
  * eth_call against Gnosis. Tries each public RPC in order; surfaces the last
  * error if every RPC fails.
  */
-export async function gnosisEthCall(
-  to: string,
-  data: string,
-): Promise<string> {
+export async function gnosisEthCall(to: string, data: string): Promise<string> {
   let lastErr: unknown = null;
   for (const rpc of GNOSIS_RPCS) {
     try {
@@ -81,7 +78,7 @@ export async function gnosisEthCall(
   throw new Error(
     `eth_call to Gnosis failed across all public RPCs: ${
       lastErr instanceof Error ? lastErr.message : String(lastErr)
-    }`,
+    }`
   );
 }
 
@@ -94,7 +91,7 @@ export async function waitForChainReceipt(
   txHash: string,
   chainId: number,
   timeoutMs = 5 * 60 * 1000,
-  intervalMs = 4000,
+  intervalMs = 4000
 ): Promise<{ status: 'success' | 'reverted' }> {
   const rpcs = rpcsForChain(chainId);
   const start = Date.now();
@@ -124,7 +121,7 @@ export async function waitForChainReceipt(
         // Try the next RPC.
       }
     }
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await new Promise(r => setTimeout(r, intervalMs));
   }
   throw new Error(`Timed out waiting for receipt ${txHash} (chain ${chainId})`);
 }
@@ -133,7 +130,7 @@ export async function waitForChainReceipt(
 export async function waitForGnosisReceipt(
   txHash: string,
   timeoutMs = 5 * 60 * 1000,
-  intervalMs = 4000,
+  intervalMs = 4000
 ): Promise<{ status: 'success' | 'reverted' }> {
   return waitForChainReceipt(txHash, GNOSIS_CHAIN_ID, timeoutMs, intervalMs);
 }
@@ -143,7 +140,7 @@ export async function waitForGnosisReceipt(
 export async function chainJsonRpcCall<T>(
   chainId: number,
   method: string,
-  params: unknown[],
+  params: unknown[]
 ): Promise<T> {
   let lastErr: unknown = null;
   for (const rpc of rpcsForChain(chainId)) {
@@ -181,21 +178,15 @@ export async function chainJsonRpcCall<T>(
   throw new Error(
     `${method} on chain ${chainId} failed across all public RPCs: ${
       lastErr instanceof Error ? lastErr.message : String(lastErr)
-    }`,
+    }`
   );
 }
 
 // ── Read methods we need to sign + send a tx ─────────────────────────────────
 
 /** Native balance (wei) of `address` on a chain in {@link CHAIN_RPCS}. */
-export async function getNativeBalance(
-  address: string,
-  chainId: number,
-): Promise<bigint> {
-  const hex = await chainJsonRpcCall<string>(chainId, 'eth_getBalance', [
-    address,
-    'latest',
-  ]);
+export async function getNativeBalance(address: string, chainId: number): Promise<bigint> {
+  const hex = await chainJsonRpcCall<string>(chainId, 'eth_getBalance', [address, 'latest']);
   return BigInt(hex);
 }
 
@@ -219,7 +210,7 @@ async function getGasPrice(chainId: number): Promise<bigint> {
 
 async function estimateGas(
   chainId: number,
-  args: { from: string; to: string; data?: string; value?: string },
+  args: { from: string; to: string; data?: string; value?: string }
 ): Promise<bigint> {
   try {
     const hex = await chainJsonRpcCall<string>(chainId, 'eth_estimateGas', [
@@ -244,9 +235,7 @@ async function estimateGas(
       chainId === GNOSIS_CHAIN_ID
         ? ' not enough xDAI/BZZ on Gnosis, duplicate stamp, or the call would fail on-chain. '
         : ' not enough native gas on the source chain, or the call would fail on chain. ';
-    throw new Error(
-      `eth_estimateGas reverted for ${args.to}.${hint}Original: ${original}`,
-    );
+    throw new Error(`eth_estimateGas reverted for ${args.to}.${hint}Original: ${original}`);
   }
 }
 
@@ -302,10 +291,8 @@ export async function sendTx(input: SendTxInput): Promise<string> {
   const gasLimitBuffered = (gasLimit * 125n) / 100n;
 
   // EIP-1559 on all networks we use (Gnosis, mainnet, L2s, Polygon).
-  const maxFeePerGas =
-    input.maxFeePerGas ?? (gasPrice * 150n) / 100n;
-  const maxPriorityFeePerGas =
-    input.maxPriorityFeePerGas ?? maxFeePerGas / 10n;
+  const maxFeePerGas = input.maxFeePerGas ?? (gasPrice * 150n) / 100n;
+  const maxPriorityFeePerGas = input.maxPriorityFeePerGas ?? maxFeePerGas / 10n;
 
   const valueBig = input.value ? BigInt(input.value) : 0n;
 
@@ -321,11 +308,7 @@ export async function sendTx(input: SendTxInput): Promise<string> {
     data: (input.data as `0x${string}`) ?? '0x',
   });
 
-  const txHash = await chainJsonRpcCall<string>(
-    chainId,
-    'eth_sendRawTransaction',
-    [signed],
-  );
+  const txHash = await chainJsonRpcCall<string>(chainId, 'eth_sendRawTransaction', [signed]);
   return txHash;
 }
 

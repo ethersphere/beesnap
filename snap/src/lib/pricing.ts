@@ -45,10 +45,7 @@ export async function fetchCurrentPrice(): Promise<bigint> {
  * Returns initialBalancePerChunk (BZZ wei per chunk) for the requested
  * `days`, plus the total BZZ amount the user owes.
  */
-export async function computeStampBzzAmount(opts: {
-  depth: number;
-  days: number;
-}): Promise<{
+export async function computeStampBzzAmount(opts: { depth: number; days: number }): Promise<{
   initialBalancePerChunk: bigint;
   totalBzz: bigint;
   pricePerChunkPerBlock: bigint;

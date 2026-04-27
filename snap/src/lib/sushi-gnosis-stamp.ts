@@ -34,16 +34,11 @@ type Route = {
 function encodeSingleHopPath(tokenIn: string, fee: number): `0x${string}` {
   return encodePacked(
     ['address', 'uint24', 'address'],
-    [GNOSIS_BZZ_ADDRESS as `0x${string}`, fee, tokenIn as `0x${string}`],
+    [GNOSIS_BZZ_ADDRESS as `0x${string}`, fee, tokenIn as `0x${string}`]
   );
 }
 
-function encodeTwoHopPath(
-  tokenIn: string,
-  fee1: number,
-  mid: string,
-  fee2: number,
-): `0x${string}` {
+function encodeTwoHopPath(tokenIn: string, fee1: number, mid: string, fee2: number): `0x${string}` {
   return encodePacked(
     ['address', 'uint24', 'address', 'uint24', 'address'],
     [
@@ -52,7 +47,7 @@ function encodeTwoHopPath(
       mid as `0x${string}`,
       fee1,
       tokenIn as `0x${string}`,
-    ],
+    ]
   );
 }
 
@@ -71,7 +66,7 @@ async function poolHasLiquidity(pool: `0x${string}`): Promise<boolean> {
 }
 
 async function findDirectBzzPool(
-  tokenIn: string,
+  tokenIn: string
 ): Promise<{ pool: `0x${string}`; fee: number } | null> {
   for (const fee of FEE_TIERS) {
     try {
@@ -102,7 +97,7 @@ const poolPairCache: Record<string, { pool: `0x${string}`; fee: number } | null>
 
 async function findPoolBetween(
   tokenA: string,
-  tokenB: string,
+  tokenB: string
 ): Promise<{ pool: `0x${string}`; fee: number } | null> {
   const key = [tokenA.toLowerCase(), tokenB.toLowerCase()].sort().join(':');
   if (key in poolPairCache) {
@@ -138,9 +133,7 @@ async function findPoolBetween(
 }
 
 /** Same ordering as the web's `findSushiRoutes` for a non-xDAI ERC-20. */
-export async function findSushiRoutesForFromToken(
-  fromToken: string,
-): Promise<Route[]> {
+export async function findSushiRoutesForFromToken(fromToken: string): Promise<Route[]> {
   const routes: Route[] = [];
   const effective = fromToken;
 
@@ -193,14 +186,14 @@ export async function findSushiRoutesForFromToken(
  */
 export async function getBridgeUsdcToBzzPathAndMaxIn(
   bzzAmountOut: bigint,
-  slippagePercent: number,
+  slippagePercent: number
 ): Promise<{ maxAmountIn: bigint; path: `0x${string}`; routeDescription: string }> {
   const fromToken = RELAY_BRIDGE_TOKEN_ON_GNOSIS;
   const routes = await findSushiRoutesForFromToken(fromToken);
 
   if (routes.length === 0) {
     throw new Error(
-      'No SushiSwap pool route from USDC to BZZ on Gnosis. Try again later or use a smaller size.',
+      'No SushiSwap pool route from USDC to BZZ on Gnosis. Try again later or use a smaller size.'
     );
   }
 
@@ -245,6 +238,6 @@ export async function getBridgeUsdcToBzzPathAndMaxIn(
   }
 
   throw new Error(
-    `Could not quote USDC → BZZ: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
+    `Could not quote USDC → BZZ: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`
   );
 }

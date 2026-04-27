@@ -172,7 +172,7 @@ export async function getStampQuote(input: BuyStampQuoteInput): Promise<{
   ];
 
   const slippageBps = Math.round(
-    (input.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT) * 100,
+    (input.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT) * 100
   ).toString();
 
   const body: RelayQuoteRequest = {
@@ -206,15 +206,13 @@ export async function getStampQuote(input: BuyStampQuoteInput): Promise<{
     throw new Error(
       parsed.message ??
         parsed.errorCode ??
-        `Relay quote failed (${res.status}): ${errText.slice(0, 200)}`,
+        `Relay quote failed (${res.status}): ${errText.slice(0, 200)}`
     );
   }
 
   const quote = (await res.json()) as RelayQuoteResponse;
   const totalAmountUSD = Number(quote.details.currencyIn.amountUsd ?? 0);
-  const estimatedTimeSeconds = Math.ceil(
-    quote.details.timeEstimate ?? 0,
-  );
+  const estimatedTimeSeconds = Math.ceil(quote.details.timeEstimate ?? 0);
 
   return { quote, totalAmountUSD, estimatedTimeSeconds };
 }
@@ -224,9 +222,7 @@ export async function getStampQuote(input: BuyStampQuoteInput): Promise<{
  * Multicaller runs USDC.approve + SushiSwapStampsRouter.createBatch (same as
  * `getRelayCrossChainWithSushiQuote` in the web app).
  */
-async function getCrossChainStampQuote(
-  input: BuyStampQuoteInput,
-): Promise<{
+async function getCrossChainStampQuote(input: BuyStampQuoteInput): Promise<{
   quote: RelayQuoteResponse;
   totalAmountUSD: number;
   estimatedTimeSeconds: number;
@@ -234,10 +230,7 @@ async function getCrossChainStampQuote(
   const bzzOut = BigInt(input.bzzAmount);
   const slip = input.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT;
 
-  const { maxAmountIn, path } = await getBridgeUsdcToBzzPathAndMaxIn(
-    bzzOut,
-    slip,
-  );
+  const { maxAmountIn, path } = await getBridgeUsdcToBzzPathAndMaxIn(bzzOut, slip);
 
   const approvalData = encodeFunctionData({
     abi: ERC20_APPROVE_ABI,
@@ -306,7 +299,7 @@ async function getCrossChainStampQuote(
     throw new Error(
       parsed.message ??
         parsed.errorCode ??
-        `Relay cross-chain quote failed (${res.status}): ${errText.slice(0, 200)}`,
+        `Relay cross-chain quote failed (${res.status}): ${errText.slice(0, 200)}`
     );
   }
 
@@ -326,7 +319,7 @@ async function getCrossChainStampQuote(
  */
 export async function monitorRelayStatus(
   endpoint: string,
-  onProgress: (msg: string) => void,
+  onProgress: (msg: string) => void
 ): Promise<void> {
   const maxAttempts = RELAY_STATUS_MAX_ATTEMPTS;
   let attempts = 0;
@@ -364,15 +357,13 @@ export async function monitorRelayStatus(
       case 'failure':
         throw new Error('Relay reported the cross-chain swap failed.');
       case 'refund':
-        throw new Error(
-          'The cross-chain swap failed and your funds were refunded.',
-        );
+        throw new Error('The cross-chain swap failed and your funds were refunded.');
       case 'unknown':
         unknownCount += 1;
         onProgress('Waiting for transaction to be indexed…');
         if (unknownCount >= maxUnknown) {
           throw new Error(
-            'Relay status indexing timed out. The transaction may still settle — check your wallet.',
+            'Relay status indexing timed out. The transaction may still settle — check your wallet.'
           );
         }
         await sleep(RELAY_STATUS_CHECK_INTERVAL_MS);
@@ -388,7 +379,7 @@ export async function monitorRelayStatus(
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise(r => setTimeout(r, ms));
 }
 
 // ── Step execution ───────────────────────────────────────────────────────────
@@ -411,7 +402,7 @@ export interface ExecuteContext {
  */
 export async function executeRelaySteps(
   quote: RelayQuoteResponse,
-  ctx: ExecuteContext,
+  ctx: ExecuteContext
 ): Promise<void> {
   for (let i = 0; i < quote.steps.length; i += 1) {
     const step = quote.steps[i];
@@ -435,9 +426,7 @@ export async function executeRelaySteps(
             data: data.data,
             value: data.value && data.value !== '0' ? toHexBig(data.value) : '0x0',
             gas: data.gas ? BigInt(data.gas) : undefined,
-            maxFeePerGas: data.maxFeePerGas
-              ? BigInt(data.maxFeePerGas)
-              : undefined,
+            maxFeePerGas: data.maxFeePerGas ? BigInt(data.maxFeePerGas) : undefined,
             maxPriorityFeePerGas: data.maxPriorityFeePerGas
               ? BigInt(data.maxPriorityFeePerGas)
               : undefined,
@@ -448,11 +437,7 @@ export async function executeRelaySteps(
 
         ctx.onStatus(`Waiting for transaction confirmation…`);
 
-        const receipt = await waitForChainReceipt(
-          txHash,
-          data.chainId,
-          TRANSACTION_TIMEOUT_MS,
-        );
+        const receipt = await waitForChainReceipt(txHash, data.chainId, TRANSACTION_TIMEOUT_MS);
         if (receipt.status !== 'success') {
           throw new Error(`Transaction reverted: ${txHash}`);
         }
@@ -471,8 +456,7 @@ export async function executeRelaySteps(
 
 function friendlyStepMessage(step: RelayStep): string {
   const desc = (step.description ?? '').toLowerCase();
-  if (desc.includes('depositing') && desc.includes('relayer'))
-    return 'Depositing funds…';
+  if (desc.includes('depositing') && desc.includes('relayer')) return 'Depositing funds…';
   if (desc.includes('swap') && desc.includes('bzz')) return 'Processing swap…';
   if (desc.includes('approve')) return 'Approving token…';
   return `Step: ${step.id}`;

@@ -13,8 +13,7 @@
  */
 import { useEffect, useState } from 'react';
 
-const SNAP_ID =
-  process.env.NEXT_PUBLIC_SNAP_ID || 'local:http://localhost:8080';
+const SNAP_ID = process.env.NEXT_PUBLIC_SNAP_ID || 'local:http://localhost:8080';
 const SNAP_VERSION = process.env.NEXT_PUBLIC_SNAP_VERSION || '0.1.0';
 
 const IS_LOCAL_SNAP = SNAP_ID.startsWith('local:');
@@ -28,9 +27,16 @@ type WalletStatus =
   | 'installed'
   | 'error';
 
+/** Minimal EIP-1193 surface used for Snaps install checks. */
+type SnapsRecord = Record<string, { version?: string }>;
+
+interface EthereumProvider {
+  request(args: { method: string; params?: unknown }): Promise<unknown>;
+}
+
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: EthereumProvider;
   }
 }
 
@@ -47,7 +53,8 @@ export default function InstallPage() {
     // Check for `wallet_getSnaps` — only MetaMask exposes it.
     window.ethereum
       .request({ method: 'wallet_getSnaps' })
-      .then((snaps: Record<string, { version?: string }>) => {
+      .then((raw) => {
+        const snaps = raw as SnapsRecord;
         if (snaps && snaps[SNAP_ID]) {
           setStatus('installed');
         } else {
@@ -62,21 +69,21 @@ export default function InstallPage() {
     setErrorMsg(null);
     setStatus('installing');
     try {
-      const result = await window.ethereum.request({
+      const result = (await window.ethereum.request({
         method: 'wallet_requestSnaps',
         params: {
           [SNAP_ID]: { version: SNAP_VERSION },
         },
-      });
+      })) as SnapsRecord;
       if (result && result[SNAP_ID]) {
         setStatus('installed');
       } else {
         setStatus('error');
         setErrorMsg('MetaMask returned no result.');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error');
-      setErrorMsg(err?.message ?? String(err));
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -84,38 +91,35 @@ export default function InstallPage() {
     <div className="install-card">
       <h1>Beesnap</h1>
       <p className="lead">
-        Swarm bee snap integration with MetaMask — buy postage stamps and upload
-        files from your wallet.
+        Swarm bee snap integration with MetaMask — buy postage stamps and upload files from your
+        wallet.
       </p>
 
       {IS_LOCAL_SNAP ? (
         <div className="install-prereq" role="note">
           <p>
-            <strong>1. Snap bundle on port 8080</strong> — in one terminal, from
-            the repo root, run <code>npm run snap:dev</code> and leave it running.
-            That starts the dev server MetaMask uses to load the Snap (with rebuilds
-            on change). You do <em>not</em> need to run a separate{' '}
-            <code>serve</code> process for this workflow.
+            <strong>1. Snap bundle on port 8080</strong> — in one terminal, from the repo root, run{' '}
+            <code>npm run snap:dev</code> and leave it running. That starts the dev server MetaMask
+            uses to load the Snap (with rebuilds on change). You do <em>not</em> need to run a
+            separate <code>serve</code> process for this workflow.
           </p>
           <p>
             <strong>When to use a static serve instead</strong> — if you run{' '}
-            <code>cd snap &amp;&amp; npm run build</code> and then serve the
-            result, use <code>npm run snap:serve</code> (from the root scripts),
-            and stop the other 8080 process so only one is bound to the port. Do
-            not run <code>snap:dev</code> and <code>snap:serve</code> on the
-            same port at once.
+            <code>cd snap &amp;&amp; npm run build</code> and then serve the result, use{' '}
+            <code>npm run snap:serve</code> (from the root scripts), and stop the other 8080 process
+            so only one is bound to the port. Do not run <code>snap:dev</code> and{' '}
+            <code>snap:serve</code> on the same port at once.
           </p>
           <p>
-            <strong>2. This install page on port 3000</strong> — in a second
-            terminal, run <code>npm run dev</code> at the repo root, open this
-            site, and click <strong>Install Snap</strong>. The Next.js app is only
-            the installer; MetaMask still downloads the Snap from{' '}
-            <code>http://localhost:8080</code>, not from port 3000.
+            <strong>2. This install page on port 3000</strong> — in a second terminal, run{' '}
+            <code>npm run dev</code> at the repo root, open this site, and click{' '}
+            <strong>Install Snap</strong>. The Next.js app is only the installer; MetaMask still
+            downloads the Snap from <code>http://localhost:8080</code>, not from port 3000.
           </p>
           <p>
-            <strong>Sanity check:</strong> open <code>http://localhost:8080</code> in
-            a browser. If that URL does not load, installation may fail with
-            &quot;executor failed to initialize&quot;.
+            <strong>Sanity check:</strong> open <code>http://localhost:8080</code> in a browser. If
+            that URL does not load, installation may fail with &quot;executor failed to
+            initialize&quot;.
           </p>
         </div>
       ) : null}
@@ -136,9 +140,8 @@ export default function InstallPage() {
         <div className="installed-block">
           <p>The Beesnap Snap is installed.</p>
           <p>
-            Open MetaMask, click the menu (top left), pick <b>Snaps</b>, then
-            select <b>Beesnap</b>. From there you can buy stamps, upload files,
-            and view what you have uploaded.
+            Open MetaMask, click the menu (top left), pick <b>Snaps</b>, then select <b>Beesnap</b>.
+            From there you can buy stamps, upload files, and view what you have uploaded.
           </p>
         </div>
       )}
@@ -170,13 +173,7 @@ export default function InstallPage() {
   );
 }
 
-function Status({
-  status,
-  errorMsg,
-}: {
-  status: WalletStatus;
-  errorMsg: string | null;
-}) {
+function Status({ status, errorMsg }: { status: WalletStatus; errorMsg: string | null }) {
   switch (status) {
     case 'idle':
       return <p className="status">Checking MetaMask…</p>;
@@ -189,8 +186,8 @@ function Status({
     case 'snap-not-supported':
       return (
         <p className="status warn">
-          Your MetaMask version does not support Snaps. Update MetaMask to the
-          latest stable version.
+          Your MetaMask version does not support Snaps. Update MetaMask to the latest stable
+          version.
         </p>
       );
     case 'ready':
@@ -205,9 +202,7 @@ function Status({
       return <p className="status ok">Beesnap Snap is installed.</p>;
     case 'error':
       return (
-        <p className="status error">
-          Could not install the Snap: {errorMsg ?? 'unknown error'}
-        </p>
+        <p className="status error">Could not install the Snap: {errorMsg ?? 'unknown error'}</p>
       );
   }
 }

@@ -100,10 +100,7 @@ export async function patchState(patch: Partial<SnapState>): Promise<SnapState> 
 }
 
 /** Append an upload record for the given account. */
-export async function addUpload(
-  account: string,
-  record: UploadRecord,
-): Promise<void> {
+export async function addUpload(account: string, record: UploadRecord): Promise<void> {
   const state = await getState();
   const key = account.toLowerCase();
   const existing = state.uploads[key] ?? [];
@@ -134,10 +131,7 @@ export async function rememberAccount(account: string): Promise<void> {
  * Pass `null` for `gen` to *clear* the active poll — call this any time the
  * user navigates away from the screen that started the poll.
  */
-export async function setActivePoll(
-  id: string,
-  gen: number | null,
-): Promise<void> {
+export async function setActivePoll(id: string, gen: number | null): Promise<void> {
   const state = await getState();
   const polls = { ...(state.activePolls ?? {}) };
   if (gen === null) {
@@ -150,10 +144,7 @@ export async function setActivePoll(
 }
 
 /** True iff this gen is the currently-active poll for `id`. */
-export async function isActivePoll(
-  id: string,
-  gen: number,
-): Promise<boolean> {
+export async function isActivePoll(id: string, gen: number): Promise<boolean> {
   const state = await getState();
   return state.activePolls?.[id] === gen;
 }
