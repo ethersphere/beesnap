@@ -362,23 +362,17 @@ export async function uploadFile(
   return { ok: true, reference: parsed.reference, debug };
 }
 
-/** Old compiled-in default — never use as a real node; clear if still persisted. */
-const LEGACY_PRESET_NODE_ADDRESS = '0x5cb4839B7d7b0ab6BaAbFEdD6749497ECa65b2Ca';
-
 /**
  * GET `${effectiveBeeBase}/wallet` and store `settings.nodeAddress`. Call on
- * home load and whenever the Bee base URL is saved. Removes the historical
- * hardcoded preset on upgrade.
+ * home load and whenever the Bee base URL is saved.
+ *
+ * Always clears any cached `nodeAddress` first so a Bee URL change never
+ * keeps the previous node's wallet; then refills from `/wallet` when the probe
+ * succeeds (otherwise the field stays empty until the next successful sync).
  */
 export async function syncStoredNodeAddressWithWallet(): Promise<void> {
   const state = await getState();
-  const na = state.settings.nodeAddress;
-  if (
-    na &&
-    na.toLowerCase() === LEGACY_PRESET_NODE_ADDRESS.toLowerCase()
-  ) {
-    delete state.settings.nodeAddress;
-  }
+  delete state.settings.nodeAddress;
 
   const base = state.settings.beeApiUrl?.trim() || DEFAULT_BEE_API_URL;
   const probe = await fetchNodeWalletAddress(base);

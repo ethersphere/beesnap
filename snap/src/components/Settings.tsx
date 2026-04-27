@@ -2,7 +2,7 @@
  * Settings screen.
  *
  *  - beeApiUrl — overrides DEFAULT_BEE_API_URL when pointing at a Bee proxy.
- *  - nodeAddress — read-only in UI; always populated from GET `${beeApiUrl}/wallet`
+ *  - nodeAddress — read-only; from GET `{Bee API base URL}/wallet` (same base as above).
  *    (see `syncStoredNodeAddressWithWallet` in bee.ts). Not user-editable so we
  *    never stamp against a guessed address.
  */
@@ -35,7 +35,7 @@ export const SETTINGS_FIELDS = {
 
 export interface SettingsFormProps {
   beeApiUrl: string;
-  /** Last persisted node address from GET /wallet (may be empty if unreachable). */
+  /** Last persisted node address from GET `{beeApiUrl}/wallet` (may be empty if unreachable). */
   nodeAddress: string;
   savedJustNow?: boolean;
   validationError?: string;
@@ -45,7 +45,15 @@ export interface SettingsFormProps {
   liveDefaultNode?: { ok: true; address: `0x${string}` } | { ok: false; reason: string };
 }
 
+function effectiveBeeBase(beeApiUrl: string): string {
+  const t = beeApiUrl.trim();
+  return t ? t.replace(/\/+$/, '') : DEFAULT_BEE_API_URL.replace(/\/+$/, '');
+}
+
 export function SettingsForm(p: SettingsFormProps) {
+  const beeBase = effectiveBeeBase(p.beeApiUrl);
+  const walletUrl = `${beeBase}/wallet`;
+
   return (
     <Container>
       <Box>
@@ -94,10 +102,13 @@ export function SettingsForm(p: SettingsFormProps) {
 
         <Section>
           <Heading size="sm">Current Bee node</Heading>
-          <Row label="Bee API URL in use">
-            <Text>{p.beeApiUrl || DEFAULT_BEE_API_URL}</Text>
+          <Row label="Bee API base in use">
+            <Text>{beeBase}</Text>
           </Row>
-          <Row label="Node address (from /wallet)">
+          <Row label="Wallet endpoint (GET)">
+            <Text>{walletUrl}</Text>
+          </Row>
+          <Row label="Node address (response)">
             <Text>
               {p.nodeAddress
                 ? p.nodeAddress
