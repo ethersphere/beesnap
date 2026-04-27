@@ -1,0 +1,2803 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAccount, useChainId, usePublicClient, useWalletClient, useSwitchChain } from 'wagmi';
+import { watchChainId, getWalletClient } from '@wagmi/core';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { config, getPollingInterval } from '@/app/wagmi';
+import { createConfig, EVM, ChainId, ChainType, getChains, Chain } from '@lifi/sdk';
+import styles from './css/SwapComponent.module.css';
+import { parseAbi, formatUnits } from 'viem';
+import { getAddress } from 'viem';
+
+import { ExecutionStatus, UploadStep } from './types';
+import {
+  GNOSIS_PRICE_ORACLE_ADDRESS,
+  GNOSIS_PRICE_ORACLE_ABI,
+  DEFAULT_NODE_ADDRESS,
+  GNOSIS_BZZ_ADDRESS,
+  DEFAULT_SWARM_CONFIG,
+  STORAGE_OPTIONS,
+  BEE_GATEWAY_URL,
+  GNOSIS_DESTINATION_TOKEN,
+  TIME_OPTIONS,
+  GNOSIS_CUSTOM_REGISTRY_ADDRESS,
+  SUSHI_STAMPS_ROUTER_ADDRESS,
+  DEFAULT_BEE_API_URL,
+  DEFAULT_SLIPPAGE,
+  MIN_TOKEN_BALANCE_USD,
+  LIFI_API_KEY,
+  // Note: LiFi execution constants removed - now using Relay API
+  UPLOAD_RETRY_CONFIG,
+  FILE_SIZE_CONFIG,
+  UPLOAD_TIMEOUT_CONFIG,
+} from './constants';
+
+import HelpSection from './HelpSection';
+import StampListSection from './StampListSection';
+import UploadHistorySection from './UploadHistorySection';
+import SearchableChainDropdown from './SearchableChainDropdown';
+import SearchableTokenDropdown from './SearchableTokenDropdown';
+import StorageStampsDropdown from './StorageStampsDropdown';
+import StorageDurationDropdown from './StorageDurationDropdown';
+
+import {
+  formatErrorMessage,
+  createBatchId,
+  readBatchId,
+  performWithRetry,
+  toChecksumAddress,
+  getGnosisPublicClient,
+  setGnosisRpcUrl,
+  // handleExchangeRateUpdate removed - was only used by LiFi
+  fetchCurrentPriceFromOracle,
+  fetchStampInfo,
+  formatExpiryTime,
+  isExpiringSoon,
+  getStampUsage,
+  updateHistoryAfterTopUp,
+} from './utils';
+import { useTimer } from './TimerUtils';
+
+// Note: LiFi quote functions removed - now using Relay API via RelayQuotes.ts
+import {
+  getRelaySwapQuotes,
+  getRelayCrossChainWithSushiQuote,
+  executeRelaySteps,
+  RelayQuoteResponse,
+  parseRelayError,
+} from './RelayQuotes';
+import { getSushiQuote, executeSushiSwap, SushiQuoteResult } from './SushiQuotes';
+import {
+  handleFileUpload as uploadFile,
+  handleMultiFileUpload,
+  isArchiveFile,
+  MultiFileResult,
+  getUserFriendlyErrorMessage,
+} from './FileUploadUtils';
+import { handleFolderSelection } from './FolderUploadUtils';
+import { processNFTCollection, NFTCollectionResult } from './NFTCollectionProcessor';
+import { generateAndUpdateNonce, fetchNodeWalletAddress } from './utils';
+import { useTokenManagement } from './TokenUtils';
+
+// Update the StampInfo interface to include the additional properties
+interface StampInfo {
+  batchID: string;
+  utilization: number;
+  usable: boolean;
+  depth: number;
+  amount: string;
+  bucketDepth: number;
+  exists: boolean;
+  batchTTL: number;
+  // Add the additional properties we're using
+  totalSize?: string;
+  usedSize?: string;
+  remainingSize?: string;
+  utilizationPercent?: number;
+  createdDate?: string;
+}
+
+const SwapComponent: React.FC = () => {
+  // Log version info on component initialization
+  React.useEffect(() => {
+    console.log(`
+                               🐝 BEEPORT 🐝    
+    ╔════════════════════════════════════════════════════════════════╗
+    ║                         Version: 1.1.9                         ║
+    ║                                                                ║
+    ║            Multichain Swarm Upload & Stamp Manager             ║
+    ║              https://github.com/ethersphere/beeport            ║
+    ╚════════════════════════════════════════════════════════════════╝
+    `);
+  }, []);
+
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
+  const { openConnectModal } = useConnectModal();
+
+  // Add state to track if component has mounted to prevent hydration mismatches
+  const [hasMounted, setHasMounted] = useState(false);
+  const [badgeLabel, setBadgeLabel] = useState<'LOCAL' | 'TEST' | 'BETA'>('BETA');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [selectedChainId, setSelectedChainId] = useState<number | null>(null);
+  const [executionResult, setExecutionResult] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<bigint | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number | null>(null);
+  const [selectedDepth, setSelectedDepth] = useState(22);
+  const [nodeAddress, setNodeAddress] = useState<string>(DEFAULT_NODE_ADDRESS);
+  const [isWebpageUpload, setIsWebpageUpload] = useState(false);
+  const [isTarFile, setIsTarFile] = useState(false);
+  const [isFolderUpload, setIsFolderUpload] = useState(false);
+  const [isNewStampCreated, setIsNewStampCreated] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [totalUsdAmount, setTotalUsdAmount] = useState<string | null>(null);
+  const [availableChains, setAvailableChains] = useState<Chain[]>([]);
+  const [isChainsLoading, setIsChainsLoading] = useState(true);
+  const [liquidityError, setLiquidityError] = useState<boolean>(false);
+  const [aggregatorDown, setAggregatorDown] = useState<boolean>(false);
+  const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
+  const [isPriceEstimating, setIsPriceEstimating] = useState(false);
+  const [isDistributing, setIsDistributing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<ExecutionStatus>({
+    step: '',
+    message: '',
+  });
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [uploadStep, setUploadStep] = useState<UploadStep>('idle');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isMultipleFiles, setIsMultipleFiles] = useState(false);
+  const [multiFileResults, setMultiFileResults] = useState<MultiFileResult[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [showStampList, setShowStampList] = useState(false);
+
+  // Approval options state
+  const [approvalType, setApprovalType] = useState<'exact' | 'infinite'>('exact');
+  const [showApprovalDropdown, setShowApprovalDropdown] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState(false);
+  const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  const approvalDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close approval dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        approvalDropdownRef.current &&
+        !approvalDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowApprovalDropdown(false);
+      }
+    };
+
+    if (showApprovalDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showApprovalDropdown]);
+
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
+  const [postageBatchId, setPostageBatchId] = useState<string>('');
+  const [topUpBatchId, setTopUpBatchId] = useState<string | null>(null);
+  const [isTopUp, setIsTopUp] = useState(false);
+
+  // Use the token management hook
+  const {
+    fromToken,
+    setFromToken,
+    selectedTokenInfo,
+    setSelectedTokenInfo,
+    availableTokens,
+    tokenBalances,
+    isTokensLoading,
+    fetchTokensAndBalances,
+    resetTokens,
+  } = useTokenManagement(address, isConnected);
+
+  const [beeApiUrl, setBeeApiUrl] = useState<string>(DEFAULT_BEE_API_URL);
+
+  const [swarmConfig, setSwarmConfig] = useState(DEFAULT_SWARM_CONFIG);
+
+  const [isCustomNode, setIsCustomNode] = useState(false);
+
+  const [useCustomSlippage, setUseCustomSlippage] = useState(false);
+  const [customSlippagePercent, setCustomSlippagePercent] = useState(DEFAULT_SLIPPAGE);
+
+  const [showUploadHistory, setShowUploadHistory] = useState(false);
+
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  const [serveUncompressed, setServeUncompressed] = useState(true);
+
+  // NFT Collection states
+  const [isNFTCollection, setIsNFTCollection] = useState(false);
+  const [nftCollectionResult, setNftCollectionResult] = useState<{
+    imagesReference: string;
+    metadataReference: string;
+    totalImages: number;
+    totalMetadata: number;
+  } | null>(null);
+
+  // Add states to track top-up completion
+  const [topUpCompleted, setTopUpCompleted] = useState(false);
+  const [topUpInfo, setTopUpInfo] = useState<{
+    batchId: string;
+    days: number;
+    cost: string;
+  } | null>(null);
+
+  // Add state for original stamp info (used in top-ups)
+  const [originalStampInfo, setOriginalStampInfo] = useState<StampInfo | null>(null);
+
+  // Add a ref to track the current wallet client
+  const currentWalletClientRef = useRef(walletClient);
+
+  // Update the ref whenever walletClient changes
+  useEffect(() => {
+    currentWalletClientRef.current = walletClient;
+  }, [walletClient]);
+
+  const { estimatedTime, setEstimatedTime, remainingTime, formatTime, resetTimer } =
+    useTimer(statusMessage);
+
+  // Add a ref for the abort controller
+  const priceEstimateAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Add state for custom RPC
+  const [isCustomRpc, setIsCustomRpc] = useState(false);
+  const [customRpcUrl, setCustomRpcUrl] = useState<string>('');
+
+  // Watch for changes to custom RPC URL settings and update global setting
+  useEffect(() => {
+    // Update the global RPC URL when custom RPC settings change
+    setGnosisRpcUrl(isCustomRpc ? customRpcUrl : undefined);
+  }, [isCustomRpc, customRpcUrl]);
+
+  // Initial setup that runs only once to set the chain ID from wallet
+  useEffect(() => {
+    if (chainId && !isInitialized) {
+      console.log('Initial chain setup with ID:', chainId);
+      setSelectedChainId(chainId);
+      setIsInitialized(true);
+    }
+  }, [chainId, isInitialized]);
+
+  useEffect(() => {
+    const init = async () => {
+      setIsWalletLoading(true);
+      if (isConnected && address && isInitialized) {
+        setSelectedDays(null);
+        resetTokens();
+      }
+      setIsWalletLoading(false);
+    };
+
+    init();
+  }, [isConnected, address, isInitialized, resetTokens]);
+
+  // Separate useEffect to fetch tokens after selectedChainId is updated
+  useEffect(() => {
+    if (selectedChainId && isInitialized) {
+      console.log('Fetching tokens with chain ID:', selectedChainId);
+      fetchTokensAndBalances(selectedChainId);
+    }
+  }, [selectedChainId, isInitialized, isConnected, address, fetchTokensAndBalances]);
+
+  useEffect(() => {
+    if (chainId && isInitialized) {
+      // Only update selectedChainId if we've already initialized
+      // This handles chain switching after initial load
+      if (chainId !== selectedChainId) {
+        console.log('Chain changed from', selectedChainId, 'to', chainId);
+        setSelectedChainId(chainId);
+        setSelectedDays(null);
+        resetTokens();
+      }
+    }
+    // selectedChainId intentionally omitted - we only want to respond to chainId changes
+    // Including it would cause the effect to run twice when chains differ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chainId, isInitialized, resetTokens]);
+
+  // This useEffect will be moved after initializeLiFi declaration
+
+  useEffect(() => {
+    const fetchChains = async () => {
+      try {
+        setIsChainsLoading(true);
+        const chains = await getChains({ chainTypes: [ChainType.EVM] });
+        setAvailableChains(chains);
+        console.log('✅ Loaded chains:', chains.length);
+      } catch (error) {
+        console.error('❌ Error fetching chains:', error);
+        // Fallback: set some basic chains if LiFi fails
+        setAvailableChains([]);
+      } finally {
+        setIsChainsLoading(false);
+      }
+    };
+
+    // Only fetch chains on client side
+    if (typeof window !== 'undefined') {
+      fetchChains();
+    }
+  }, []);
+
+  // This useEffect will be moved after updateSwarmBatchInitialBalance declaration
+
+  useEffect(() => {
+    if (!isConnected || !address || !fromToken) return;
+    setTotalUsdAmount(null);
+    setLiquidityError(false);
+    setAggregatorDown(false);
+    setIsPriceEstimating(true);
+
+    // Cancel any previous price estimate operations
+    if (priceEstimateAbortControllerRef.current) {
+      console.log('Cancelling previous price estimate');
+      priceEstimateAbortControllerRef.current.abort();
+    }
+
+    // Create a new abort controller for this run
+    priceEstimateAbortControllerRef.current = new AbortController();
+    const abortSignal = priceEstimateAbortControllerRef.current.signal;
+
+    const updatePriceEstimate = async () => {
+      if (!selectedChainId || !address) return;
+
+      // Reset insufficient funds state at the beginning of new price estimation
+      setInsufficientFunds(false);
+      setLiquidityError(false);
+      setAggregatorDown(false);
+
+      try {
+        const bzzAmount = calculateTotalAmount().toString();
+
+        console.log('🔍 Price estimation:', {
+          bzzAmount: formatUnits(BigInt(bzzAmount), 16),
+          selectedDays,
+          stampSize:
+            STORAGE_OPTIONS.find(option => option.depth === selectedDepth)?.size || 'Unknown',
+          selectedChainId,
+          fromToken,
+        });
+
+        // ── Gnosis + non-BZZ token: use SushiSwapStampsRouter for quote ──────────
+        const isGnosisNonBzz =
+          selectedChainId === ChainId.DAI &&
+          fromToken &&
+          getAddress(fromToken) !== getAddress(GNOSIS_BZZ_ADDRESS) &&
+          SUSHI_STAMPS_ROUTER_ADDRESS !== '';
+
+        // ── Cross-chain + router deployed: Relay → USDC → Sushi → BZZ → stamp ──
+        const isCrossChainWithSushi =
+          selectedChainId !== ChainId.DAI && SUSHI_STAMPS_ROUTER_ADDRESS !== '';
+
+        let totalAmountUSD: number;
+
+        if (isGnosisNonBzz) {
+          console.log('🍣 Using SushiSwap quote for Gnosis token…');
+
+          const tokenPriceUsd = selectedTokenInfo ? Number(selectedTokenInfo.priceUSD) : 0;
+          const tokenDecimals = selectedTokenInfo?.decimals ?? 18;
+          const tokenSymbol = selectedTokenInfo?.symbol ?? 'Token';
+
+          const sushiQuote = await getSushiQuote({
+            fromToken,
+            bzzAmount,
+            slippagePercent: useCustomSlippage ? customSlippagePercent : DEFAULT_SLIPPAGE,
+            tokenSymbol,
+            tokenDecimals,
+            tokenPriceUsd,
+          });
+
+          if (abortSignal.aborted) return;
+
+          totalAmountUSD = sushiQuote.totalAmountUSD;
+          console.log(`💰 SushiSwap quote: $${totalAmountUSD.toFixed(2)}`);
+        } else if (isCrossChainWithSushi) {
+          // ── Cross-chain: Relay bridges to USDC, SushiRouter swaps → BZZ → stamp
+          console.log('🌉 Using Relay→USDC→Sushi quote for cross-chain…');
+
+          const crossChainResult = await getRelayCrossChainWithSushiQuote({
+            selectedChainId,
+            fromToken,
+            address,
+            bzzAmount,
+            nodeAddress,
+            swarmConfig,
+            topUpBatchId: isTopUp ? topUpBatchId || undefined : undefined,
+            setEstimatedTime: () => {},
+            isForEstimation: true,
+            slippagePercent: useCustomSlippage ? customSlippagePercent : undefined,
+          });
+
+          if (abortSignal.aborted) return;
+
+          totalAmountUSD = crossChainResult.totalAmountUSD;
+          console.log(`💰 Cross-chain USDC+Sushi estimate: $${totalAmountUSD.toFixed(2)}`);
+        } else {
+          // ── Gnosis + BZZ direct (or fallback): use Relay ───────────────────────
+          const relayQuoteResult = await getRelaySwapQuotes({
+            selectedChainId,
+            fromToken,
+            address,
+            bzzAmount,
+            nodeAddress,
+            swarmConfig,
+            topUpBatchId: isTopUp ? topUpBatchId || undefined : undefined,
+            setEstimatedTime: () => {},
+            isForEstimation: true,
+            slippagePercent: useCustomSlippage ? customSlippagePercent : undefined,
+          });
+
+          if (abortSignal.aborted) return;
+
+          totalAmountUSD = relayQuoteResult.totalAmountUSD;
+          console.log(`💰 Relay price estimation complete: $${totalAmountUSD.toFixed(2)}`);
+        }
+
+        // If operation was aborted, don't continue
+        if (abortSignal.aborted) {
+          console.log('Price estimate aborted');
+          return;
+        }
+
+        setTotalUsdAmount(totalAmountUSD.toString());
+
+        // Check if user has enough funds
+        if (selectedTokenInfo) {
+          const tokenBalanceInUsd =
+            Number(formatUnits(selectedTokenInfo.amount || 0n, selectedTokenInfo.decimals)) *
+            Number(selectedTokenInfo.priceUSD);
+
+          console.log('User token balance in USD:', tokenBalanceInUsd);
+          console.log('Required amount in USD:', totalAmountUSD);
+
+          // Set insufficient funds flag if cost exceeds available balance
+          setInsufficientFunds(totalAmountUSD > tokenBalanceInUsd);
+        }
+      } catch (error) {
+        // Only update error state if not aborted
+        if (!abortSignal.aborted) {
+          console.error('Error estimating price:', error);
+          setTotalUsdAmount(null);
+
+          // Parse Relay-specific errors for better error categorization
+          const { userMessage, errorCode } = parseRelayError(error);
+
+          if (errorCode) {
+            console.error('🚨 Relay Price Estimation Error:', {
+              errorCode,
+              userMessage,
+              originalError: error,
+            });
+          }
+
+          // Check for specific error types
+          const isNoRoutesError =
+            errorCode === 'NO_SWAP_ROUTES_FOUND' ||
+            errorCode === 'NO_QUOTES' ||
+            errorCode === 'NO_INTERNAL_SWAP_ROUTES_FOUND';
+
+          const isLiquidityError =
+            errorCode === 'INSUFFICIENT_LIQUIDITY' || errorCode === 'SWAP_IMPACT_TOO_HIGH';
+
+          if (isNoRoutesError) {
+            console.log('No routes available for this swap');
+            setAggregatorDown(true);
+          } else if (isLiquidityError) {
+            console.log('Liquidity issue detected');
+            setLiquidityError(true);
+          } else {
+            // Fallback to checking error message for legacy compatibility
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isLegacyNotFoundError =
+              errorMessage.includes('404') ||
+              errorMessage.includes('Not Found') ||
+              errorMessage.includes('No available quotes for the requested transfer') ||
+              errorMessage.includes('NotFoundError');
+
+            if (isLegacyNotFoundError) {
+              console.log('Legacy: No quotes available');
+              setAggregatorDown(true);
+            } else {
+              setLiquidityError(true);
+            }
+          }
+        }
+      } finally {
+        // Only update loading state if not aborted
+        if (!abortSignal.aborted) {
+          setIsPriceEstimating(false);
+        }
+      }
+    };
+
+    if (selectedDays) {
+      updatePriceEstimate();
+    } else {
+      // If no days selected, still reset the loading state
+      setIsPriceEstimating(false);
+    }
+
+    // Cleanup: abort any pending operations when the effect is cleaned up
+    return () => {
+      if (priceEstimateAbortControllerRef.current) {
+        priceEstimateAbortControllerRef.current.abort();
+        priceEstimateAbortControllerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swarmConfig.swarmBatchTotal]);
+
+  // Initialize LiFi function
+  const initializeLiFi = useCallback(() => {
+    // Create new config instead of modifying existing one
+    createConfig({
+      integrator: 'Swarm',
+      apiKey: LIFI_API_KEY,
+      providers: [
+        EVM({
+          getWalletClient: async () => {
+            // Use the ref instead of the direct walletClient
+            const client = currentWalletClientRef.current;
+            if (!client) throw new Error('Wallet client not available');
+            return client;
+          },
+          switchChain: async chainId => {
+            if (switchChain) {
+              switchChain({ chainId });
+            }
+            // Get a fresh wallet client for the new chain
+            try {
+              // Wait briefly for the chain to switch
+              await new Promise(resolve => setTimeout(resolve, 500));
+              // Create a new wallet client with the specified chainId
+              const client = await getWalletClient(config, { chainId });
+              // Update our ref
+              currentWalletClientRef.current = client;
+              return client;
+            } catch (error) {
+              console.error('Error getting wallet client:', error);
+              if (currentWalletClientRef.current) return currentWalletClientRef.current;
+              throw new Error('Failed to get wallet client for the new chain');
+            }
+          },
+        }),
+      ],
+    });
+  }, [switchChain]);
+
+  useEffect(() => {
+    if (isConnected && publicClient && walletClient) {
+      // Reinitialize LiFi whenever the wallet changes
+      initializeLiFi();
+    } else {
+    }
+  }, [isConnected, publicClient, walletClient, address, initializeLiFi]);
+
+  const fetchAndSetNodeWalletAddress = useCallback(async () => {
+    const address = await fetchNodeWalletAddress(beeApiUrl, DEFAULT_NODE_ADDRESS);
+    setNodeAddress(address);
+  }, [beeApiUrl]);
+
+  // Check if BZZ approval is needed
+  const checkBzzApproval = useCallback(
+    async (amount: bigint): Promise<boolean> => {
+      if (!address || !publicClient) return true;
+
+      try {
+        const allowance = await publicClient.readContract({
+          address: GNOSIS_BZZ_ADDRESS as `0x${string}`,
+          abi: parseAbi([
+            'function allowance(address owner, address spender) external view returns (uint256)',
+          ]),
+          functionName: 'allowance',
+          args: [address as `0x${string}`, GNOSIS_CUSTOM_REGISTRY_ADDRESS as `0x${string}`],
+        });
+
+        return BigInt(allowance.toString()) < amount;
+      } catch (error) {
+        console.error('Failed to check BZZ allowance:', error);
+        return true; // Default to needing approval if check fails
+      }
+    },
+    [address, publicClient]
+  );
+
+  // Handle BZZ approval
+  const handleBzzApproval = async () => {
+    if (!address || !publicClient || !walletClient || !currentPrice || !selectedDays) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setShowOverlay(true);
+      setStatusMessage({
+        step: 'Approval',
+        message: 'Approving BZZ tokens...',
+      });
+
+      // Calculate amount based on whether this is a top-up or new batch
+      let totalAmount: bigint;
+      if (isTopUp && originalStampInfo) {
+        totalAmount = calculateTopUpAmount(originalStampInfo.depth);
+      } else {
+        const initialPaymentPerChunkPerDay = BigInt(currentPrice) * BigInt(17280);
+        const totalPricePerDuration = initialPaymentPerChunkPerDay * BigInt(selectedDays);
+        totalAmount = totalPricePerDuration * BigInt(2 ** selectedDepth);
+      }
+
+      const MAX_UINT256 =
+        '115792089237316195423570985008687907853269984665640564039457584007913129639935';
+      const approvalAmount = approvalType === 'infinite' ? BigInt(MAX_UINT256) : totalAmount;
+
+      const approveCallData = {
+        address: GNOSIS_BZZ_ADDRESS as `0x${string}`,
+        abi: [
+          {
+            constant: false,
+            inputs: [
+              { name: '_spender', type: 'address' },
+              { name: '_value', type: 'uint256' },
+            ],
+            name: 'approve',
+            outputs: [{ name: 'success', type: 'bool' }],
+            type: 'function',
+          },
+        ],
+        functionName: 'approve',
+        args: [GNOSIS_CUSTOM_REGISTRY_ADDRESS, approvalAmount],
+        account: address,
+      };
+
+      const approveTxHash = await walletClient.writeContract(approveCallData);
+
+      setStatusMessage({
+        step: 'Approval',
+        message: 'Waiting for approval confirmation...',
+      });
+
+      const approveReceipt = await publicClient.waitForTransactionReceipt({
+        hash: approveTxHash,
+        pollingInterval: getPollingInterval(chainId),
+      });
+
+      if (approveReceipt.status !== 'success') {
+        throw new Error('Approval failed');
+      }
+
+      console.log(
+        `✅ ${approvalType === 'infinite' ? 'Infinite' : 'Exact'} BZZ approval completed successfully`
+      );
+
+      // Update approval status
+      setNeedsApproval(false);
+      setIsLoading(false);
+      setShowOverlay(false);
+    } catch (error) {
+      console.error('Approval failed:', error);
+      setStatusMessage({
+        step: 'Error',
+        message: 'Approval failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        isError: true,
+      });
+      setIsLoading(false);
+      setShowOverlay(false);
+    }
+  };
+
+  // Check approval status when relevant parameters change
+  useEffect(() => {
+    const checkApprovalStatus = async () => {
+      if (
+        selectedChainId === ChainId.DAI &&
+        fromToken &&
+        getAddress(fromToken) === getAddress(GNOSIS_BZZ_ADDRESS) &&
+        currentPrice &&
+        selectedDays &&
+        address &&
+        publicClient
+      ) {
+        setIsCheckingApproval(true);
+
+        // Calculate total amount
+        let totalAmount: bigint;
+        if (isTopUp && originalStampInfo) {
+          totalAmount = calculateTopUpAmount(originalStampInfo.depth);
+        } else {
+          const initialPaymentPerChunkPerDay = BigInt(currentPrice) * BigInt(17280);
+          const totalPricePerDuration = initialPaymentPerChunkPerDay * BigInt(selectedDays);
+          totalAmount = totalPricePerDuration * BigInt(2 ** selectedDepth);
+        }
+
+        const needsApprovalResult = await checkBzzApproval(totalAmount);
+        setNeedsApproval(needsApprovalResult);
+        setIsCheckingApproval(false);
+      } else {
+        setNeedsApproval(false);
+        setIsCheckingApproval(false);
+      }
+    };
+
+    checkApprovalStatus();
+  }, [
+    selectedChainId,
+    fromToken,
+    currentPrice,
+    selectedDays,
+    address,
+    publicClient,
+    isTopUp,
+    originalStampInfo,
+    selectedDepth,
+    checkBzzApproval,
+  ]);
+
+  useEffect(() => {
+    const fetchAndSetNode = async () => {
+      await fetchAndSetNodeWalletAddress();
+    };
+    fetchAndSetNode();
+  }, [beeApiUrl, fetchAndSetNodeWalletAddress]);
+
+  // This useEffect will be moved after fetchCurrentPrice declaration
+
+  const fetchCurrentPrice = useCallback(async () => {
+    // Get RPC info outside try block for error logging
+    const { client, rpcUrl } = getGnosisPublicClient(0);
+
+    try {
+      // Try primary RPC (custom/env or first fallback)
+      const price = await client.readContract({
+        address: GNOSIS_PRICE_ORACLE_ADDRESS as `0x${string}`,
+        abi: GNOSIS_PRICE_ORACLE_ABI,
+        functionName: 'currentPrice',
+      });
+
+      if (price === null || price === undefined) {
+        console.log('Oracle returned empty data, using fallback price: 65000');
+        setCurrentPrice(BigInt(65000));
+        return;
+      }
+
+      console.log('Price fetched from oracle:', price);
+      setCurrentPrice(BigInt(price));
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`Primary RPC (${rpcUrl}) failed:`, errorMsg.split('.')[0]);
+
+      // Try with a different RPC as fallback
+      try {
+        const { client: fallbackClient, rpcUrl: fallbackRpcUrl } = getGnosisPublicClient(1);
+        const fallbackPrice = await fallbackClient.readContract({
+          address: GNOSIS_PRICE_ORACLE_ADDRESS as `0x${string}`,
+          abi: GNOSIS_PRICE_ORACLE_ABI,
+          functionName: 'currentPrice',
+        });
+
+        console.log('Price fetched from fallback RPC:', fallbackPrice);
+        setCurrentPrice(BigInt(fallbackPrice));
+      } catch (fallbackError) {
+        const { rpcUrl: fallbackRpcUrl } = getGnosisPublicClient(1);
+        const fallbackErrorMsg =
+          fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        console.error(`Fallback RPC (${fallbackRpcUrl}) failed:`, fallbackErrorMsg.split('.')[0]);
+        console.log('Using final fallback price: 65000');
+        setCurrentPrice(BigInt(65000)); // Final fallback price
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Execute price fetching when wallet connects
+    fetchCurrentPrice();
+  }, [isConnected, address, fetchCurrentPrice]);
+
+  const updateSwarmBatchInitialBalance = useCallback(() => {
+    if (currentPrice !== null) {
+      const initialPaymentPerChunkPerDay = BigInt(currentPrice) * BigInt(17280);
+      const totalPricePerDuration =
+        BigInt(initialPaymentPerChunkPerDay) * BigInt(selectedDays || 1);
+
+      // Calculate total amount based on whether this is a top-up or new batch
+      let depthToUse: number;
+
+      if (isTopUp && originalStampInfo) {
+        // For top-ups, use the original depth from the stamp
+        depthToUse = originalStampInfo.depth;
+      } else {
+        // For new batches, use the selected depth
+        depthToUse = selectedDepth;
+      }
+
+      const totalAmount = totalPricePerDuration * BigInt(2 ** depthToUse);
+
+      setSwarmConfig(prev => ({
+        ...prev,
+        swarmBatchInitialBalance: totalPricePerDuration.toString(),
+        swarmBatchTotal: totalAmount.toString(),
+      }));
+    }
+  }, [currentPrice, selectedDays, isTopUp, originalStampInfo, selectedDepth]);
+
+  // Move the useEffect that was causing declaration order issues
+  useEffect(() => {
+    if (!selectedDays || selectedDays === 0) {
+      setTotalUsdAmount(null);
+      setSwarmConfig(DEFAULT_SWARM_CONFIG);
+      return;
+    }
+
+    if (!currentPrice) return;
+
+    try {
+      updateSwarmBatchInitialBalance();
+    } catch (error) {
+      console.error('Error calculating total cost:', error);
+      setTotalUsdAmount(null);
+      setSwarmConfig(DEFAULT_SWARM_CONFIG);
+    }
+  }, [currentPrice, selectedDays, selectedDepth, updateSwarmBatchInitialBalance]);
+
+  const calculateTotalAmount = () => {
+    const price = currentPrice || 0n; // Use 0n as default if currentPrice is null
+    const initialPaymentPerChunkPerDay = price * 17280n;
+    const totalPricePerDuration = initialPaymentPerChunkPerDay * BigInt(selectedDays || 1);
+
+    // Use the appropriate depth based on whether this is a top-up
+    let depthToUse: number;
+
+    if (isTopUp && originalStampInfo) {
+      // For top-ups, use the original depth from the stamp
+      depthToUse = originalStampInfo.depth;
+    } else {
+      // For new batches, use the selected depth
+      depthToUse = selectedDepth;
+    }
+
+    return totalPricePerDuration * BigInt(2 ** depthToUse);
+  };
+
+  const handleDepthChange = (newDepth: number) => {
+    setSelectedDepth(newDepth);
+    setSwarmConfig(prev => ({
+      ...prev,
+      swarmBatchDepth: newDepth.toString(),
+    }));
+  };
+
+  const handleDirectBzzTransactions = async (updatedConfig: any) => {
+    // Ensure we have all needed objects and data
+    if (!address || !publicClient || !walletClient) {
+      console.error('Missing required objects for direct BZZ transaction');
+      return;
+    }
+
+    try {
+      // Calculate amount based on whether this is a top-up or new batch
+      let totalAmount: bigint;
+
+      if (isTopUp && originalStampInfo) {
+        // For top-ups, use the original depth from the stamp
+        totalAmount = calculateTopUpAmount(originalStampInfo.depth);
+
+        // Update swarmBatchInitialBalance for top-up (price per chunk)
+        if (currentPrice !== null && selectedDays) {
+          const initialPaymentPerChunkPerDay = BigInt(currentPrice) * BigInt(17280);
+          const pricePerChunkForDuration = initialPaymentPerChunkPerDay * BigInt(selectedDays);
+          setSwarmConfig(prev => ({
+            ...prev,
+            swarmBatchInitialBalance: pricePerChunkForDuration.toString(),
+          }));
+        }
+      } else {
+        // For new batches, use the total from updatedConfig
+        totalAmount = BigInt(updatedConfig.swarmBatchTotal);
+      }
+
+      // Generate specific transaction message based on operation type
+      const operationMsg = isTopUp
+        ? `Topping up batch ${
+            topUpBatchId?.startsWith('0x') ? topUpBatchId.slice(2, 8) : topUpBatchId?.slice(0, 6)
+          }...${topUpBatchId?.slice(-4)}`
+        : 'Buying storage...';
+
+      // Approval is now handled separately, proceed directly to stamp creation
+
+      // Prepare contract write parameters - different based on operation type
+      let contractWriteParams;
+
+      if (isTopUp && topUpBatchId) {
+        // Top up existing batch
+        contractWriteParams = {
+          address: GNOSIS_CUSTOM_REGISTRY_ADDRESS as `0x${string}`,
+          abi: parseAbi(updatedConfig.swarmContractAbi),
+          functionName: 'topUpBatch',
+          args: [topUpBatchId as `0x${string}`, updatedConfig.swarmBatchInitialBalance],
+          account: address,
+        };
+      } else {
+        // Create new batch
+        contractWriteParams = {
+          address: GNOSIS_CUSTOM_REGISTRY_ADDRESS as `0x${string}`,
+          abi: parseAbi(updatedConfig.swarmContractAbi),
+          functionName: 'createBatchRegistry',
+          args: [
+            address,
+            nodeAddress,
+            updatedConfig.swarmBatchInitialBalance,
+            updatedConfig.swarmBatchDepth,
+            updatedConfig.swarmBatchBucketDepth,
+            updatedConfig.swarmBatchNonce,
+            updatedConfig.swarmBatchImmutable,
+          ],
+          account: address,
+        };
+      }
+
+      console.log('Creating transaction with params:', contractWriteParams);
+
+      // Execute the batch creation or top-up
+      const batchTxHash = await walletClient.writeContract(contractWriteParams);
+      console.log(`${isTopUp ? 'Top up' : 'Create batch'} transaction hash:`, batchTxHash);
+
+      // Wait for batch transaction to be mined
+      const batchReceipt = await publicClient.waitForTransactionReceipt({
+        hash: batchTxHash,
+        pollingInterval: getPollingInterval(chainId),
+      });
+
+      if (batchReceipt.status === 'success') {
+        if (isTopUp) {
+          // For top-up, we already have the batch ID
+          console.log('Successfully topped up batch ID:', topUpBatchId);
+          setPostageBatchId(topUpBatchId as string);
+
+          // Set top-up completion info
+          setTopUpCompleted(true);
+          setTopUpInfo({
+            batchId: topUpBatchId as string,
+            days: selectedDays || 0,
+            cost: totalUsdAmount || '0',
+          });
+
+          setStatusMessage({
+            step: 'Complete',
+            message: 'Batch Topped Up Successfully',
+            isSuccess: true,
+          });
+
+          // Update upload history with new expiry date immediately
+          if (address && topUpBatchId && selectedDays) {
+            updateHistoryAfterTopUp(topUpBatchId as string, selectedDays, address);
+          }
+          // Don't set upload step for top-ups
+        } else {
+          try {
+            // Calculate the batch ID for logging
+            const calculatedBatchId = readBatchId(
+              updatedConfig.swarmBatchNonce,
+              GNOSIS_CUSTOM_REGISTRY_ADDRESS
+            );
+
+            console.log('Batch created successfully with ID:', calculatedBatchId);
+
+            setStatusMessage({
+              step: 'Complete',
+              message: 'Storage Bought Successfully',
+              isSuccess: true,
+              warning:
+                'Note: It takes approximately 1-2 minutes for new storage to become accessible on the network. Please wait before uploading.',
+            });
+            setIsNewStampCreated(true);
+            setUploadStep('ready');
+          } catch (error) {
+            console.error('Failed to process batch completion:', error);
+            throw new Error('Failed to process batch completion');
+          }
+        }
+      } else {
+        throw new Error(`${isTopUp ? 'Top-up' : 'Batch creation'} failed`);
+      }
+    } catch (error) {
+      console.error(`Error in direct BZZ transactions: ${error}`);
+      setStatusMessage({
+        step: 'Error',
+        message: 'Transaction failed',
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        isError: true,
+      });
+    }
+  };
+
+  // Note: Old LiFi functions removed (handleGnosisTokenSwap, handleCrossChainSwap,
+  // handleChainSwitch, handleGnosisRoute) - now using Relay API via RelayQuotes.ts
+
+  const handleSwap = async () => {
+    if (!isConnected || !address || !publicClient || !walletClient || selectedChainId === null) {
+      console.error('Wallet not connected, clients not available, or chain not selected');
+      return;
+    }
+
+    // Reset the timer when starting a new transaction
+    resetTimer();
+
+    // Use the utility function to generate and update the nonce
+    const updatedConfig = generateAndUpdateNonce(swarmConfig, setSwarmConfig);
+
+    // IMPORTANT: Ensure the updatedConfig has the latest calculated values
+    // This fixes the BZZ amount mismatch between price estimation and execution
+    if (currentPrice !== null && selectedDays) {
+      const initialPaymentPerChunkPerDay = BigInt(currentPrice) * BigInt(17280);
+      const totalPricePerDuration = initialPaymentPerChunkPerDay * BigInt(selectedDays);
+
+      // Calculate total amount based on whether this is a top-up or new batch
+      let depthToUse: number;
+      if (isTopUp && originalStampInfo) {
+        // For top-ups, use the original depth from the stamp
+        depthToUse = originalStampInfo.depth;
+      } else {
+        // For new batches, use the selected depth
+        depthToUse = selectedDepth;
+      }
+
+      const totalAmount = totalPricePerDuration * BigInt(2 ** depthToUse);
+
+      // Update the config with the latest calculated values
+      updatedConfig.swarmBatchInitialBalance = totalPricePerDuration.toString();
+      updatedConfig.swarmBatchTotal = totalAmount.toString();
+      updatedConfig.swarmBatchDepth = depthToUse.toString();
+    }
+
+    // For new batches (not top-ups), create the batch ID once here
+    if (!isTopUp && address) {
+      try {
+        // Calculate and log the batch ID for this transaction
+        const calculatedBatchId = readBatchId(
+          updatedConfig.swarmBatchNonce,
+          GNOSIS_CUSTOM_REGISTRY_ADDRESS
+        );
+
+        // Also call createBatchId to set the state (fire and forget)
+        createBatchId(
+          updatedConfig.swarmBatchNonce,
+          GNOSIS_CUSTOM_REGISTRY_ADDRESS,
+          setPostageBatchId
+        )
+          .then(stateBasedBatchId => {
+            console.log('State-based batch ID from createBatchId:', stateBasedBatchId);
+          })
+          .catch(error => {
+            console.error('Error in createBatchId for state:', error);
+          });
+      } catch (error) {
+        console.error('Failed to pre-calculate batch ID:', error);
+      }
+    }
+
+    setIsLoading(true);
+    setShowOverlay(true);
+    setUploadStep('idle');
+    setStatusMessage({
+      step: 'Initialization',
+      message: 'Preparing transaction...',
+    });
+
+    try {
+      // Find the token in available tokens
+      const selectedToken = availableTokens?.tokens[selectedChainId]?.find(token => {
+        try {
+          return toChecksumAddress(token.address) === toChecksumAddress(fromToken);
+        } catch (error) {
+          console.error('Error comparing token addresses:', error);
+          return false;
+        }
+      });
+
+      if (!selectedToken || !selectedToken.address) {
+        throw new Error('Selected token not found');
+      }
+
+      setStatusMessage({
+        step: 'Calculation',
+        message: 'Calculating amounts...',
+      });
+
+      // ── Branch 1: Gnosis + BZZ direct → no swap needed ─────────────────────
+      if (
+        selectedChainId !== null &&
+        selectedChainId === ChainId.DAI &&
+        getAddress(fromToken) === getAddress(GNOSIS_BZZ_ADDRESS)
+      ) {
+        await handleDirectBzzTransactions(updatedConfig);
+      } else if (
+        // ── Branch 2: Gnosis + other token → SushiSwapStampsRouter ────────────
+        selectedChainId !== null &&
+        selectedChainId === ChainId.DAI &&
+        SUSHI_STAMPS_ROUTER_ADDRESS !== ''
+      ) {
+        const tokenPriceUsd = selectedToken ? Number(selectedTokenInfo?.priceUSD ?? 0) : 0;
+        const tokenDecimals = selectedTokenInfo?.decimals ?? 18;
+        const tokenSymbol = selectedTokenInfo?.symbol ?? 'Token';
+
+        await executeSushiSwap({
+          fromToken,
+          bzzAmount: updatedConfig.swarmBatchTotal,
+          slippagePercent: useCustomSlippage ? customSlippagePercent : DEFAULT_SLIPPAGE,
+          address,
+          swarmConfig: updatedConfig,
+          topUpBatchId: isTopUp ? topUpBatchId || undefined : undefined,
+          nodeAddress,
+          walletClient,
+          publicClient,
+          tokenSymbol,
+          tokenDecimals,
+          tokenPriceUsd,
+          setStatusMessage,
+          onTransactionConfirmed: () => {
+            console.log('🍣 SushiSwap stamp transaction confirmed!');
+          },
+        });
+
+        console.log('🎉 SushiSwap stamp purchase completed successfully!');
+
+        // Reset timer when done
+        resetTimer();
+
+        // Handle post-swap completion flow (same as original LiFi implementation)
+        try {
+          if (isTopUp && topUpBatchId) {
+            console.log('Successfully topped up batch ID:', topUpBatchId);
+            setPostageBatchId(topUpBatchId);
+
+            // Set top-up completion info
+            setTopUpCompleted(true);
+            setTopUpInfo({
+              batchId: topUpBatchId,
+              days: selectedDays || 0,
+              cost: totalUsdAmount || '0',
+            });
+
+            setStatusMessage({
+              step: 'Complete',
+              message: 'Batch Topped Up Successfully',
+              isSuccess: true,
+            });
+
+            // Update upload history with new expiry date immediately
+            if (address && selectedDays) {
+              updateHistoryAfterTopUp(topUpBatchId, selectedDays, address);
+            }
+          } else {
+            // Calculate the batch ID for new batch creation
+            const calculatedBatchId = readBatchId(
+              updatedConfig.swarmBatchNonce,
+              GNOSIS_CUSTOM_REGISTRY_ADDRESS
+            );
+
+            console.log('Batch created successfully with ID:', calculatedBatchId);
+            setPostageBatchId(calculatedBatchId);
+
+            setStatusMessage({
+              step: 'Complete',
+              message: 'Storage Bought Successfully',
+              isSuccess: true,
+              warning:
+                'Note: It takes approximately 1-2 minutes for new storage to become accessible on the network. Please wait before uploading.',
+            });
+
+            // Transition to upload step - this was missing!
+            setIsNewStampCreated(true);
+            setUploadStep('ready');
+          }
+        } catch (error) {
+          console.error('Failed to process batch completion:', error);
+          setStatusMessage({
+            step: 'Error',
+            message: 'Failed to process batch completion',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            isError: true,
+          });
+        }
+      } else {
+        // ── Branch 3: cross-chain ───────────────────────────────────────────────
+        // Prefer Relay → USDC → SushiRouter → BZZ → stamp (better routing).
+        // Fall back to legacy Relay → BZZ path if router is not deployed.
+        const useSushiBridge = SUSHI_STAMPS_ROUTER_ADDRESS !== '';
+
+        setStatusMessage({
+          step: 'Quoting',
+          message: 'Getting quote...',
+        });
+
+        let crossChainRelayResponse: RelayQuoteResponse;
+        let crossChainEstimatedTime: number;
+
+        if (useSushiBridge) {
+          console.log('🌉 Cross-chain via Relay→USDC→SushiRouter→BZZ→stamp…');
+
+          const result = await getRelayCrossChainWithSushiQuote({
+            selectedChainId,
+            fromToken,
+            address,
+            bzzAmount: updatedConfig.swarmBatchTotal,
+            nodeAddress,
+            swarmConfig: updatedConfig,
+            topUpBatchId: isTopUp ? topUpBatchId || undefined : undefined,
+            setEstimatedTime: () => {},
+            isForEstimation: false,
+            slippagePercent: useCustomSlippage ? customSlippagePercent : undefined,
+          });
+
+          crossChainRelayResponse = result.relayQuoteResponse;
+          crossChainEstimatedTime = result.estimatedTime;
+
+          console.log('✅ Cross-chain USDC+Sushi quotes ready:', {
+            totalUSD: `$${result.totalAmountUSD.toFixed(2)}`,
+            steps: result.steps.length,
+            estimatedTime: result.estimatedTime,
+          });
+        } else {
+          // Legacy: Relay bridges directly to BZZ
+          const relayQuoteResult = await getRelaySwapQuotes({
+            selectedChainId,
+            fromToken,
+            address,
+            bzzAmount: updatedConfig.swarmBatchTotal,
+            nodeAddress,
+            swarmConfig: updatedConfig,
+            topUpBatchId: isTopUp ? topUpBatchId || undefined : undefined,
+            setEstimatedTime: () => {},
+            isForEstimation: false,
+            slippagePercent: useCustomSlippage ? customSlippagePercent : undefined,
+          });
+
+          crossChainRelayResponse = relayQuoteResult.relayQuoteResponse;
+          crossChainEstimatedTime = relayQuoteResult.estimatedTime;
+
+          console.log('✅ Relay execution quotes ready:', {
+            totalUSD: `$${relayQuoteResult.totalAmountUSD.toFixed(2)}`,
+            steps: relayQuoteResult.steps.length,
+            estimatedTime: relayQuoteResult.estimatedTime,
+          });
+        }
+
+        setStatusMessage({
+          step: 'Preparing',
+          message: 'Preparing cross-chain swap...',
+        });
+
+        await executeRelaySteps(
+          crossChainRelayResponse,
+          walletClient,
+          publicClient,
+          setStatusMessage,
+          () => {
+            console.log(
+              '🚀 Transaction confirmed! Starting timer:',
+              crossChainEstimatedTime,
+              'seconds'
+            );
+            setEstimatedTime(crossChainEstimatedTime);
+            setStatusMessage({
+              step: 'Relay',
+              message: 'Executing cross-chain swap...',
+            });
+          }
+        );
+
+        console.log('🎉 Relay swap completed successfully!');
+        resetTimer();
+
+        try {
+          if (isTopUp && topUpBatchId) {
+            console.log('Successfully topped up batch ID:', topUpBatchId);
+            setPostageBatchId(topUpBatchId);
+            setTopUpCompleted(true);
+            setTopUpInfo({
+              batchId: topUpBatchId,
+              days: selectedDays || 0,
+              cost: totalUsdAmount || '0',
+            });
+            setStatusMessage({
+              step: 'Complete',
+              message: 'Batch Topped Up Successfully',
+              isSuccess: true,
+            });
+            if (address && selectedDays) {
+              updateHistoryAfterTopUp(topUpBatchId, selectedDays, address);
+            }
+          } else {
+            const calculatedBatchId = readBatchId(
+              updatedConfig.swarmBatchNonce,
+              GNOSIS_CUSTOM_REGISTRY_ADDRESS
+            );
+            console.log('Batch created successfully with ID:', calculatedBatchId);
+            setPostageBatchId(calculatedBatchId);
+            setStatusMessage({
+              step: 'Complete',
+              message: 'Storage Bought Successfully',
+              isSuccess: true,
+              warning:
+                'Note: It takes approximately 1-2 minutes for new storage to become accessible on the network. Please wait before uploading.',
+            });
+            setIsNewStampCreated(true);
+            setUploadStep('ready');
+          }
+        } catch (error) {
+          console.error('Failed to process Relay batch completion:', error);
+          setStatusMessage({
+            step: 'Error',
+            message: 'Failed to process batch completion',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            isError: true,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('An error occurred:', error);
+
+      // Parse errors for better user experience
+      const { userMessage, errorCode } = parseRelayError(error);
+
+      // Log detailed error information for debugging
+      if (errorCode) {
+        console.error('🚨 Relay Error Details:', {
+          errorCode,
+          userMessage,
+          originalError: error,
+        });
+      }
+
+      setStatusMessage({
+        step: 'Error',
+        message: 'Execution failed',
+        error: userMessage || formatErrorMessage(error),
+        isError: true,
+      });
+    }
+  };
+
+  const handleGetStarted = () => {
+    if (openConnectModal) {
+      openConnectModal();
+    }
+  };
+
+  const saveUploadReference = (
+    reference: string,
+    postageBatchId: string,
+    expiryDate: number,
+    filename?: string,
+    isWebpageUpload?: boolean,
+    fileSize?: number,
+    isFolderUpload?: boolean
+  ) => {
+    if (!address) return;
+
+    const savedHistory = localStorage.getItem('uploadHistory');
+    const history = savedHistory ? JSON.parse(savedHistory) : {};
+
+    const addressHistory = history[address] || [];
+    addressHistory.unshift({
+      reference,
+      timestamp: Date.now(),
+      filename,
+      stampId: postageBatchId,
+      expiryDate,
+      isWebpageUpload,
+      fileSize,
+      isFolderUpload,
+    });
+
+    history[address] = addressHistory;
+    localStorage.setItem('uploadHistory', JSON.stringify(history));
+  };
+
+  // Helper function to format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+
+    // Round to 1 decimal place for MB and above, no decimals for B and KB
+    const rounded = unitIndex >= 2 ? Math.round(size * 10) / 10 : Math.round(size);
+    return `${rounded} ${units[unitIndex]}`;
+  };
+
+  // Helper function to get total size of selected files
+  const getTotalFileSize = (): number => {
+    if (isMultipleFiles) {
+      return selectedFiles.reduce((total, file) => total + file.size, 0);
+    }
+    return selectedFile?.size || 0;
+  };
+
+  // Helper function to check if files are very large
+  const hasVeryLargeFiles = (): boolean => {
+    const threshold = FILE_SIZE_CONFIG.largeFileThresholdGB * 1024 * 1024 * 1024;
+    if (isMultipleFiles) {
+      return selectedFiles.some(file => file.size > threshold);
+    } else {
+      return (selectedFile?.size || 0) > threshold;
+    }
+  };
+
+  const exceedsMaximumUploadSize = (): boolean => {
+    const maxSizeBytes = FILE_SIZE_CONFIG.maximumFileGB * 1024 * 1024 * 1024;
+    if (isMultipleFiles) {
+      const totalSize = selectedFiles.reduce((total, file) => total + file.size, 0);
+      return totalSize > maxSizeBytes;
+    } else {
+      return (selectedFile?.size || 0) > maxSizeBytes;
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (isMultipleFiles && selectedFiles.length > 0) {
+      return handleMultipleFileUpload();
+    }
+
+    if (!selectedFile || !postageBatchId || !walletClient || !publicClient) {
+      console.error('Missing file, postage batch ID, or wallet');
+      console.log('selectedFile', selectedFile);
+      console.log('postageBatchId', postageBatchId);
+      console.log('walletClient', walletClient);
+      console.log('publicClient', publicClient);
+      return;
+    }
+
+    setIsLoading(true);
+    setShowOverlay(true);
+    setUploadStep('uploading');
+    setIsNewStampCreated(false);
+
+    // Handle NFT Collection uploads
+    if (isNFTCollection && selectedFile.name.toLowerCase().endsWith('.zip')) {
+      try {
+        const result = await processNFTCollection({
+          zipFile: selectedFile,
+          postageBatchId,
+          walletClient,
+          publicClient,
+          address,
+          beeApiUrl,
+          setProgress: setUploadProgress,
+          setStatusMessage: (message: string) =>
+            setStatusMessage({
+              step: 'Uploading',
+              message: message,
+            }),
+        });
+
+        setNftCollectionResult(result);
+
+        // Save both references to history
+        const expiryDate = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days default
+        saveUploadReference(
+          result.imagesReference,
+          postageBatchId,
+          expiryDate,
+          'images.tar',
+          false,
+          selectedFile.size
+        );
+        saveUploadReference(
+          result.metadataReference,
+          postageBatchId,
+          expiryDate,
+          'metadata.tar',
+          false,
+          selectedFile.size
+        );
+
+        setStatusMessage({
+          step: 'Complete',
+          message: `NFT Collection uploaded successfully! ${result.totalImages} images and ${result.totalMetadata} metadata files processed.`,
+          isSuccess: true,
+          reference: result.metadataReference,
+          filename: selectedFile.name,
+        });
+
+        setUploadStep('complete');
+        setSelectedDays(null);
+        setTimeout(() => {
+          setUploadStep('idle');
+          setShowOverlay(false);
+          setIsLoading(false);
+          setUploadProgress(0);
+          setIsDistributing(false);
+        }, 900000);
+
+        return;
+      } catch (error) {
+        console.error('NFT Collection upload error:', error);
+        setStatusMessage({
+          step: 'Error',
+          message: 'NFT Collection upload failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          isError: true,
+        });
+        setUploadStep('idle');
+        setUploadProgress(0);
+        setIsDistributing(false);
+        return;
+      }
+    }
+
+    const maxRetries = UPLOAD_RETRY_CONFIG.maxRetries;
+
+    // Retry wrapper for single file upload
+    for (let retryCount = 0; retryCount <= maxRetries; retryCount++) {
+      try {
+        await uploadFile({
+          selectedFile,
+          postageBatchId,
+          walletClient,
+          publicClient,
+          address,
+          beeApiUrl,
+          serveUncompressed,
+          isTarFile,
+          isWebpageUpload,
+          isFolderUpload,
+          setUploadProgress,
+          setStatusMessage,
+          setIsDistributing,
+          setUploadStep,
+          setSelectedDays,
+          setShowOverlay,
+          setIsLoading,
+          setUploadStampInfo,
+          saveUploadReference,
+        });
+        return; // Success, exit the function
+      } catch (error) {
+        console.error(`Upload attempt ${retryCount + 1} failed:`, error);
+
+        if (retryCount < maxRetries && error instanceof Error) {
+          const isRetryableError = UPLOAD_RETRY_CONFIG.retryableErrors.some(errorType =>
+            error.message.includes(errorType)
+          );
+
+          if (isRetryableError) {
+            console.log(`Retrying single file upload (${retryCount + 1}/${maxRetries})`);
+            setStatusMessage({
+              step: 'Uploading',
+              message: `Retrying upload (attempt ${retryCount + 2}/${maxRetries + 1})...`,
+            });
+
+            // Wait before retrying (configurable delay)
+            await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_CONFIG.retryDelayMs));
+            continue; // Try again
+          }
+        }
+
+        // If not retryable or max retries reached, show error
+        console.error('Upload error:', error);
+        const friendlyError =
+          error instanceof Error ? getUserFriendlyErrorMessage(error) : 'Unknown error';
+        setStatusMessage({
+          step: 'Error',
+          message: 'Upload failed',
+          error: friendlyError,
+          isError: true,
+        });
+        setUploadStep('idle');
+        setUploadProgress(0);
+        setIsDistributing(false);
+        return;
+      }
+    }
+  };
+
+  const handleMultipleFileUpload = async () => {
+    if (!selectedFiles.length || !postageBatchId || !walletClient || !publicClient) {
+      console.error('Missing files, postage batch ID, or wallet');
+      return;
+    }
+
+    setIsLoading(true);
+    setShowOverlay(true);
+    setUploadStep('uploading');
+    setIsNewStampCreated(false);
+    setMultiFileResults([]);
+
+    try {
+      await handleMultiFileUpload({
+        selectedFiles,
+        postageBatchId,
+        walletClient,
+        publicClient,
+        address,
+        beeApiUrl,
+        serveUncompressed,
+        isWebpageUpload,
+        setUploadProgress,
+        setStatusMessage,
+        setIsDistributing,
+        setUploadStep,
+        setSelectedDays,
+        setShowOverlay,
+        setIsLoading,
+        setUploadStampInfo,
+        saveUploadReference,
+        setMultiFileResults,
+      });
+    } catch (error) {
+      console.error('Multi-file upload error:', error);
+      setStatusMessage({
+        step: 'Error',
+        message: 'Multi-file upload failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        isError: true,
+      });
+      setUploadStep('idle');
+      setUploadProgress(0);
+      setIsDistributing(false);
+    }
+  };
+
+  const handleOpenDropdown = (dropdownName: string) => {
+    setActiveDropdown(dropdownName);
+  };
+
+  const handleTokenSelect = (address: string, token: any) => {
+    console.log('Token manually selected:', address, token?.symbol);
+
+    // Only reset duration if this is a user-initiated token change (not during initial loading)
+    if (fromToken && address !== fromToken) {
+      console.log('Resetting duration due to token change');
+      setSelectedDays(null);
+      setTotalUsdAmount(null);
+      setInsufficientFunds(false);
+      setLiquidityError(false);
+      setAggregatorDown(false);
+      setIsPriceEstimating(false);
+    }
+
+    setFromToken(address);
+    setSelectedTokenInfo(token);
+  };
+
+  // Reset insufficientFunds whenever the selected token changes
+  useEffect(() => {
+    // When token info changes, reset insufficient funds flag
+    if (selectedTokenInfo) {
+      setInsufficientFunds(false);
+    }
+  }, [selectedTokenInfo]);
+
+  // Also reset insufficientFunds when the selectedChainId or selectedDays changes
+  useEffect(() => {
+    setInsufficientFunds(false);
+  }, [selectedChainId, selectedDays]);
+
+  // Add a new state variable to the component
+  const [uploadStampInfo, setUploadStampInfo] = useState<StampInfo | null>(null);
+
+  // originalStampInfo state declaration moved to the top with other state declarations
+
+  // This useEffect will be moved after fetchStampInfo declaration
+
+  // Modified URL parameter parsing to also check for hash fragments
+  useEffect(() => {
+    // Only run on client-side
+    if (typeof window !== 'undefined') {
+      // First check query parameters
+      const url = new URL(window.location.href);
+      const stampParam = url.searchParams.get('topup');
+
+      // Then check hash fragments (e.g., #topup=batchId)
+      const hash = window.location.hash;
+      const hashMatch = hash.match(/^#topup=([a-fA-F0-9]+)$/);
+
+      if (stampParam) {
+        // Format with 0x prefix for contract call
+        const formattedBatchId = stampParam.startsWith('0x') ? stampParam : `0x${stampParam}`;
+        console.log(`Found stamp ID in URL query: ${formattedBatchId}`);
+        setTopUpBatchId(formattedBatchId);
+        setIsTopUp(true);
+      } else if (hashMatch && hashMatch[1]) {
+        // Format with 0x prefix for contract call
+        const hashBatchId = hashMatch[1];
+        const formattedBatchId = hashBatchId.startsWith('0x') ? hashBatchId : `0x${hashBatchId}`;
+        console.log(`Found stamp ID in URL hash: ${formattedBatchId}`);
+        setTopUpBatchId(formattedBatchId);
+        setIsTopUp(true);
+      }
+    }
+  }, []); // Only run once on mount
+
+  // Function to fetch stamp information for a given batchId
+  const fetchStampInfoForComponent = useCallback(
+    async (batchId: string): Promise<StampInfo | null> => {
+      return await fetchStampInfo(batchId, beeApiUrl);
+    },
+    [beeApiUrl]
+  );
+
+  // Add this effect to fetch stamp info when topUpBatchId is set
+  useEffect(() => {
+    // Only fetch if we have a topUpBatchId and we're in top-up mode
+    if (topUpBatchId && isTopUp) {
+      const getStampInfo = async () => {
+        const stampInfo = await fetchStampInfoForComponent(topUpBatchId);
+        if (stampInfo) {
+          console.log('Fetched original stamp info:', stampInfo);
+          setOriginalStampInfo(stampInfo);
+
+          // Update the depth to match the original stamp
+          setSelectedDepth(stampInfo.depth);
+
+          // Lock the depth to the original value since we can't change it for top-ups
+          setSwarmConfig(prev => ({
+            ...prev,
+            swarmBatchDepth: stampInfo.depth.toString(),
+          }));
+        }
+      };
+
+      getStampInfo();
+    }
+  }, [topUpBatchId, isTopUp, fetchStampInfoForComponent]);
+
+  // Calculate amount for topping up an existing batch
+  const calculateTopUpAmount = (originalDepth: number) => {
+    if (currentPrice === null || !selectedDays) return 0n;
+
+    // We use the original depth from the stamp, not the currently selected depth
+    const initialPaymentPerChunkPerDay = BigInt(currentPrice) * BigInt(17280);
+    const totalPricePerDuration = initialPaymentPerChunkPerDay * BigInt(selectedDays);
+
+    // Calculate for the original batch depth
+    return totalPricePerDuration * BigInt(2 ** originalDepth);
+  };
+
+  // Set hasMounted and badge label by host: LOCAL (localhost), TEST (beeport.xyz), BETA (elsewhere)
+  useEffect(() => {
+    setHasMounted(true);
+    if (typeof window === 'undefined') return;
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') setBadgeLabel('LOCAL');
+    else if (host === 'beeport.xyz') setBadgeLabel('TEST');
+    else setBadgeLabel('BETA');
+  }, []);
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.betaBadge}>{badgeLabel}</div>
+      <div className={styles.tabContainer}>
+        <button
+          className={`${styles.tabButton} ${
+            !showHelp && !showStampList && !showUploadHistory ? styles.activeTab : ''
+          }`}
+          onClick={() => {
+            setShowHelp(false);
+            setShowStampList(false);
+            setShowUploadHistory(false);
+          }}
+        >
+          {isTopUp ? 'Top Up' : 'Buy'}
+        </button>
+        <button
+          className={`${styles.tabButton} ${showStampList ? styles.activeTab : ''}`}
+          onClick={() => {
+            setShowHelp(false);
+            setShowStampList(true);
+            setShowUploadHistory(false);
+          }}
+        >
+          Upload
+        </button>
+        <button
+          className={`${styles.tabButton} ${showUploadHistory ? styles.activeTab : ''}`}
+          onClick={() => {
+            setShowHelp(false);
+            setShowStampList(false);
+            setShowUploadHistory(true);
+          }}
+        >
+          History
+        </button>
+        <button
+          className={`${styles.tabButton} ${showHelp ? styles.activeTab : ''}`}
+          onClick={() => {
+            setShowHelp(true);
+            setShowStampList(false);
+            setShowUploadHistory(false);
+          }}
+          aria-label="Settings"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+
+      {!showHelp && !showStampList && !showUploadHistory ? (
+        <>
+          <div className={styles.inputGroup}>
+            <label className={styles.label} data-tooltip="Select chain with funds">
+              From chain
+            </label>
+            <SearchableChainDropdown
+              selectedChainId={selectedChainId || ChainId.DAI}
+              availableChains={availableChains}
+              onChainSelect={chainId => {
+                setSelectedChainId(chainId);
+                switchChain?.({ chainId });
+              }}
+              isChainsLoading={isChainsLoading}
+              isLoading={isChainsLoading}
+              activeDropdown={activeDropdown}
+              onOpenDropdown={handleOpenDropdown}
+              sortMethod="priority"
+            />
+          </div>
+
+          <div className={styles.inputGroup}>
+            <label className={styles.label} data-tooltip="Select token you want to spend">
+              From token
+            </label>
+            <SearchableTokenDropdown
+              fromToken={fromToken}
+              selectedChainId={selectedChainId || ChainId.DAI}
+              isWalletLoading={isWalletLoading}
+              isTokensLoading={isTokensLoading}
+              isConnected={isConnected}
+              tokenBalances={tokenBalances}
+              selectedTokenInfo={selectedTokenInfo}
+              availableTokens={availableTokens}
+              onTokenSelect={handleTokenSelect}
+              minBalanceUsd={MIN_TOKEN_BALANCE_USD}
+              activeDropdown={activeDropdown}
+              onOpenDropdown={handleOpenDropdown}
+            />
+          </div>
+
+          {!isTopUp && (
+            <div className={styles.inputGroup}>
+              <label
+                className={styles.label}
+                data-tooltip="Storage stamps are used to pay to store and host data in Swarm"
+              >
+                Storage stamps
+              </label>
+              <StorageStampsDropdown
+                storageOptions={STORAGE_OPTIONS}
+                selectedDepth={selectedDepth}
+                onDepthChange={handleDepthChange}
+                disabled={isLoading}
+              />
+            </div>
+          )}
+
+          <div className={styles.inputGroup}>
+            <label
+              className={styles.label}
+              data-tooltip="Approximate storage duration - actual duration varies with BZZ price oracle changes"
+            >
+              {isTopUp ? 'Additional duration' : 'Storage duration'} (approx.)
+            </label>
+            <StorageDurationDropdown
+              timeOptions={TIME_OPTIONS}
+              selectedDays={selectedDays}
+              onDaysChange={setSelectedDays}
+              disabled={isLoading}
+              placeholder={isTopUp ? 'Please select additional duration' : 'Please select duration'}
+            />
+          </div>
+
+          {selectedDays && totalUsdAmount !== null && Number(totalUsdAmount) !== 0 && (
+            <p className={styles.priceInfo}>
+              {aggregatorDown
+                ? 'LIFI Router Error: Please try later'
+                : liquidityError
+                  ? 'Not enough liquidity for this swap'
+                  : insufficientFunds
+                    ? `Cost ($${Number(totalUsdAmount).toFixed(2)}) exceeds your balance`
+                    : `Cost without gas ~ $${Number(totalUsdAmount).toFixed(2)}`}
+            </p>
+          )}
+
+          <div className={styles.buttonContainer}>
+            <button
+              className={`${styles.button} ${
+                !isConnected
+                  ? ''
+                  : !selectedDays ||
+                      !fromToken ||
+                      liquidityError ||
+                      aggregatorDown ||
+                      insufficientFunds
+                    ? styles.buttonDisabled
+                    : ''
+              } ${isPriceEstimating ? styles.calculatingButton : ''}`}
+              disabled={
+                isConnected &&
+                (!selectedDays ||
+                  !fromToken ||
+                  liquidityError ||
+                  aggregatorDown ||
+                  insufficientFunds ||
+                  isPriceEstimating)
+              }
+              onClick={
+                !hasMounted || !isConnected
+                  ? handleGetStarted
+                  : selectedChainId === ChainId.DAI &&
+                      fromToken &&
+                      getAddress(fromToken) === getAddress(GNOSIS_BZZ_ADDRESS) &&
+                      needsApproval
+                    ? handleBzzApproval
+                    : handleSwap
+              }
+            >
+              {isLoading ? (
+                <div>Loading...</div>
+              ) : !hasMounted || !isConnected ? (
+                'Get Started'
+              ) : !selectedDays ? (
+                'Choose Timespan'
+              ) : !fromToken ? (
+                'No Token Available'
+              ) : isPriceEstimating ? (
+                'Calculating Cost...'
+              ) : aggregatorDown ? (
+                'LIFI Router Error: Please try later'
+              ) : liquidityError ? (
+                "Cannot Swap - Can't Find Route"
+              ) : insufficientFunds ? (
+                'Insufficient Balance'
+              ) : isTopUp ? (
+                'Top Up Batch'
+              ) : selectedChainId === ChainId.DAI &&
+                fromToken &&
+                getAddress(fromToken) === getAddress(GNOSIS_BZZ_ADDRESS) &&
+                needsApproval ? (
+                <div className={styles.approvalButtonContent}>
+                  <span>{approvalType === 'exact' ? 'Approve' : 'Approve Infinite'}</span>
+                  <span
+                    className={`${styles.approvalArrow} ${showApprovalDropdown ? styles.approvalArrowUp : ''}`}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setShowApprovalDropdown(!showApprovalDropdown);
+                    }}
+                  >
+                    ▼
+                  </span>
+                </div>
+              ) : (
+                'Buy Storage'
+              )}
+            </button>
+
+            {/* Approval dropdown positioned relative to the main button */}
+            {selectedChainId === ChainId.DAI &&
+              fromToken &&
+              getAddress(fromToken) === getAddress(GNOSIS_BZZ_ADDRESS) &&
+              needsApproval &&
+              showApprovalDropdown && (
+                <div className={styles.approvalOptionsOutside} ref={approvalDropdownRef}>
+                  <button
+                    className={`${styles.approvalOption} ${approvalType === 'exact' ? styles.approvalOptionActive : ''}`}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setApprovalType('exact');
+                      setShowApprovalDropdown(false);
+                    }}
+                  >
+                    <span>Approve</span>
+                    <span className={styles.approvalDescription}>Exact amount needed</span>
+                  </button>
+                  <button
+                    className={`${styles.approvalOption} ${approvalType === 'infinite' ? styles.approvalOptionActive : ''}`}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setApprovalType('infinite');
+                      setShowApprovalDropdown(false);
+                    }}
+                  >
+                    <span>Approve Infinite</span>
+                    <span className={styles.approvalDescription}>No future approvals needed</span>
+                  </button>
+                </div>
+              )}
+          </div>
+
+          {executionResult && (
+            <pre className={styles.resultBox}>{JSON.stringify(executionResult, null, 2)}</pre>
+          )}
+
+          {(isLoading || (showOverlay && uploadStep !== 'idle')) && (
+            <div className={styles.overlay}>
+              <div
+                className={`${styles.statusBox} ${statusMessage.isSuccess ? styles.success : ''}`}
+              >
+                {/* Always show close button */}
+                <button
+                  className={styles.closeButton}
+                  onClick={() => {
+                    setShowOverlay(false);
+                    setStatusMessage({ step: '', message: '' });
+                    setUploadStep('idle');
+                    setIsLoading(false);
+                    setExecutionResult(null);
+                    setSelectedFile(null);
+                    setSelectedFiles([]);
+                    setIsMultipleFiles(false);
+                    setMultiFileResults([]);
+                    setIsWebpageUpload(false);
+                    setIsTarFile(false);
+                    setIsFolderUpload(false);
+                    setIsDistributing(false);
+                    setIsNewStampCreated(false); // Reset the new stamp warning
+                  }}
+                >
+                  ×
+                </button>
+
+                {!['ready', 'uploading'].includes(uploadStep) && (
+                  <>
+                    {isLoading && statusMessage.step !== 'Complete' && (
+                      <div className={styles.spinner}></div>
+                    )}
+                    <div className={styles.statusMessage}>
+                      <h3 className={statusMessage.isSuccess ? styles.success : ''}>
+                        {statusMessage.message}
+                      </h3>
+                      {statusMessage.error && (
+                        <div className={styles.errorMessage}>{statusMessage.error}</div>
+                      )}
+                      {statusMessage.warning && (
+                        <div className={styles.warningMessage}>{statusMessage.warning}</div>
+                      )}
+
+                      {remainingTime !== null &&
+                        estimatedTime !== null &&
+                        (statusMessage.step === 'Route' ||
+                          statusMessage.step === 'deposit' ||
+                          statusMessage.step === 'Quoting' ||
+                          statusMessage.step === 'Relay') && (
+                          <div className={styles.bridgeTimer}>
+                            <p>Estimated time remaining: {formatTime(remainingTime)}</p>
+                            <div className={styles.progressBarContainer}>
+                              <div
+                                className={styles.progressBar}
+                                style={{
+                                  width: `${Math.max(
+                                    0,
+                                    Math.min(100, (1 - remainingTime / estimatedTime) * 100)
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  </>
+                )}
+
+                {['ready', 'uploading'].includes(uploadStep) && (
+                  <div className={styles.uploadBox}>
+                    <h3 className={styles.uploadTitle}>
+                      {postageBatchId
+                        ? `Upload to ${
+                            postageBatchId.startsWith('0x')
+                              ? postageBatchId.slice(2, 8)
+                              : postageBatchId.slice(0, 6)
+                          }...${postageBatchId.slice(-4)}`
+                        : 'Upload File'}
+                    </h3>
+                    <div className={styles.uploadWarning}>
+                      Warning! Uploaded data cannot be deleted - it will be removed once the stamp
+                      has expired. Uploaded data exists publicly in the network - anyone who knows
+                      the reference can access it.
+                    </div>
+                    {isNewStampCreated && (
+                      <div className={styles.uploadWarning}>
+                        ⏱️ New storage created: It takes around up to 2 minutes before it becomes
+                        accessible on the network.
+                      </div>
+                    )}
+                    {statusMessage.step === 'waiting_creation' ||
+                    statusMessage.step === 'waiting_usable' ? (
+                      <div className={styles.waitingMessage}>
+                        <div className={styles.spinner}></div>
+                        <p>{statusMessage.message}</p>
+                      </div>
+                    ) : (
+                      <div className={styles.uploadForm}>
+                        <div className={styles.checkboxWrapper}>
+                          <input
+                            type="checkbox"
+                            id="multiple-files"
+                            checked={isMultipleFiles}
+                            onChange={e => {
+                              setIsMultipleFiles(e.target.checked);
+                              // Reset selections when switching modes
+                              setSelectedFile(null);
+                              setSelectedFiles([]);
+                              setIsFolderUpload(false);
+                            }}
+                            className={styles.checkbox}
+                            disabled={uploadStep === 'uploading'}
+                          />
+                          <label htmlFor="multiple-files" className={styles.checkboxLabel}>
+                            Multiple files separately (separate hashes)
+                          </label>
+                        </div>
+
+                        <div className={styles.checkboxWrapper}>
+                          <input
+                            type="checkbox"
+                            id="folder-upload"
+                            checked={isFolderUpload}
+                            onChange={e => {
+                              setIsFolderUpload(e.target.checked);
+                              // Automatically enable webpage upload for folders
+                              if (e.target.checked) {
+                                setIsWebpageUpload(true);
+                              } else {
+                                // Reset webpage upload when folder upload is disabled
+                                setIsWebpageUpload(false);
+                              }
+                              // Reset selections when switching modes
+                              setSelectedFile(null);
+                              setSelectedFiles([]);
+                              setIsMultipleFiles(false);
+                            }}
+                            className={styles.checkbox}
+                            disabled={uploadStep === 'uploading'}
+                          />
+                          <label
+                            htmlFor="folder-upload"
+                            className={styles.checkboxLabel}
+                            title={
+                              isFolderUpload
+                                ? '📁 Select entire folders as websites. Browser will ask for permission to access folder contents - this is normal security behavior.'
+                                : ''
+                            }
+                          >
+                            Multiple files in a folder (one hash)
+                          </label>
+                        </div>
+
+                        <div className={styles.fileInputWrapper}>
+                          <input
+                            type="file"
+                            multiple={isMultipleFiles || isFolderUpload}
+                            {...(isFolderUpload && { webkitdirectory: 'true' })}
+                            onChange={async e => {
+                              if (isFolderUpload) {
+                                try {
+                                  const archiveFile = await handleFolderSelection(e.target, {
+                                    setUploadProgress,
+                                    setStatusMessage,
+                                  });
+                                  if (archiveFile) {
+                                    setSelectedFile(archiveFile);
+                                    setSelectedFiles([]);
+                                    setIsTarFile(true); // Folder archives are treated as tar files
+                                    setServeUncompressed(true); // Folder archives should be served uncompressed
+                                  }
+                                } catch (error) {
+                                  console.error('Folder upload error:', error);
+                                  setStatusMessage({
+                                    step: 'error',
+                                    message: `Folder upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                                  });
+                                }
+                              } else if (isMultipleFiles) {
+                                const files = Array.from(e.target.files || []);
+                                setSelectedFiles(files);
+                                setSelectedFile(null);
+                              } else {
+                                const file = e.target.files?.[0] || null;
+                                setSelectedFile(file);
+                                setSelectedFiles([]);
+                                setIsTarFile(
+                                  (file?.name.toLowerCase().endsWith('.tar') ||
+                                    file?.name.toLowerCase().endsWith('.zip') ||
+                                    file?.name.toLowerCase().endsWith('.gz')) ??
+                                    false
+                                );
+                              }
+                            }}
+                            className={styles.fileInput}
+                            disabled={uploadStep === 'uploading'}
+                            id="file-upload"
+                          />
+                          <label htmlFor="file-upload" className={styles.fileInputLabel}>
+                            {isFolderUpload
+                              ? selectedFile
+                                ? `Folder: ${selectedFile.name}`
+                                : 'Select Folder (auto-index)'
+                              : isMultipleFiles
+                                ? selectedFiles.length > 0
+                                  ? `${selectedFiles.length} files selected`
+                                  : 'Choose files'
+                                : selectedFile
+                                  ? selectedFile.name
+                                  : 'Choose file'}
+                          </label>
+                        </div>
+
+                        {isMultipleFiles && selectedFiles.length > 0 && (
+                          <div className={styles.fileList}>
+                            <h4>Selected files:</h4>
+                            <ul>
+                              {selectedFiles.map((file, index) => (
+                                <li key={index} className={styles.fileName}>
+                                  {file.name} ({formatFileSize(file.size)})
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* File size warnings */}
+                        {(selectedFile || selectedFiles.length > 0) && (
+                          <div className={styles.fileSizeInfo}>
+                            <div className={styles.fileSizeTotal}>
+                              Total size: {formatFileSize(getTotalFileSize())}
+                            </div>
+                            {!exceedsMaximumUploadSize() && hasVeryLargeFiles() && (
+                              <div className={styles.largeFileWarning}>
+                                ⚠️ Large files detected ({'>'}2GB). Upload may take several hours.
+                                Please ensure stable internet connection and keep this tab open.
+                              </div>
+                            )}
+                            {exceedsMaximumUploadSize() && (
+                              <div className={styles.errorMessage}>
+                                ❌ Total upload size exceeds the maximum allowed size of{' '}
+                                {FILE_SIZE_CONFIG.maximumFileGB}GB. Please select smaller files or
+                                fewer files.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {!isMultipleFiles &&
+                          (selectedFile?.name.toLowerCase().endsWith('.zip') ||
+                            selectedFile?.name.toLowerCase().endsWith('.gz')) && (
+                            <div className={styles.checkboxWrapper}>
+                              <input
+                                type="checkbox"
+                                id="serve-uncompressed"
+                                checked={serveUncompressed}
+                                onChange={e => setServeUncompressed(e.target.checked)}
+                                className={styles.checkbox}
+                                disabled={uploadStep === 'uploading'}
+                              />
+                              <label htmlFor="serve-uncompressed" className={styles.checkboxLabel}>
+                                Serve uncompressed
+                                <span
+                                  className={styles.tooltip}
+                                  title="You will be able to see all files in archive and browse them through index.html file"
+                                >
+                                  ?
+                                </span>
+                              </label>
+                            </div>
+                          )}
+
+                        {!isMultipleFiles && selectedFile?.name.toLowerCase().endsWith('.zip') && (
+                          <div className={styles.checkboxWrapper}>
+                            <input
+                              type="checkbox"
+                              id="nft-collection"
+                              checked={isNFTCollection}
+                              onChange={e => setIsNFTCollection(e.target.checked)}
+                              className={styles.checkbox}
+                              disabled={uploadStep === 'uploading'}
+                            />
+                            <label htmlFor="nft-collection" className={styles.checkboxLabel}>
+                              Upload NFT collection
+                              <span
+                                className={styles.tooltip}
+                                title="Upload a ZIP file containing 'images' and 'json' folders. Images will be uploaded separately, and JSON metadata will be updated with bzz.link URLs pointing to the uploaded images."
+                              >
+                                ?
+                              </span>
+                            </label>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleFileUpload}
+                          disabled={
+                            (isMultipleFiles ? selectedFiles.length === 0 : !selectedFile) ||
+                            uploadStep === 'uploading' ||
+                            exceedsMaximumUploadSize()
+                          }
+                          className={styles.uploadButton}
+                        >
+                          {uploadStep === 'uploading' ? (
+                            <>
+                              <div className={styles.smallSpinner}></div>
+                              {statusMessage.step === '404'
+                                ? 'Waiting for storage to be usable...'
+                                : statusMessage.step === '422'
+                                  ? 'Waiting for storage to be usable...'
+                                  : statusMessage.step === 'Uploading'
+                                    ? isDistributing
+                                      ? 'Distributing file chunks...'
+                                      : `Uploading... ${uploadProgress.toFixed(1)}%`
+                                    : 'Processing...'}
+                            </>
+                          ) : isMultipleFiles ? (
+                            `Upload ${selectedFiles.length} files`
+                          ) : (
+                            'Upload'
+                          )}
+                        </button>
+                        {uploadStep === 'uploading' && (
+                          <>
+                            {!isDistributing ? (
+                              // Show the regular progress bar during upload
+                              <div className={styles.progressBarContainer}>
+                                <div
+                                  className={styles.progressBar}
+                                  style={{ width: `${uploadProgress}%` }}
+                                />
+                              </div>
+                            ) : (
+                              // Show the distribution animation when distributing to Swarm
+                              <div className={styles.distributionContainer}>
+                                {/* Center cube (source node) */}
+                                <div className={styles.centerNode}></div>
+
+                                {/* Target nodes (cubes) */}
+                                <div className={`${styles.node} ${styles.node1}`}></div>
+                                <div className={`${styles.node} ${styles.node2}`}></div>
+                                <div className={`${styles.node} ${styles.node3}`}></div>
+                                <div className={`${styles.node} ${styles.node4}`}></div>
+                                <div className={`${styles.node} ${styles.node5}`}></div>
+                                <div className={`${styles.node} ${styles.node6}`}></div>
+                                <div className={`${styles.node} ${styles.node7}`}></div>
+                                <div className={`${styles.node} ${styles.node8}`}></div>
+
+                                {/* Chunks being distributed */}
+                                <div className={`${styles.chunk} ${styles.chunk1}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk2}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk3}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk4}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk5}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk6}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk7}`}></div>
+                                <div className={`${styles.chunk} ${styles.chunk8}`}></div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {uploadStep === 'complete' && (
+                  <div className={styles.successMessage}>
+                    <div className={styles.successIcon}>✓</div>
+                    <h3>{isMultipleFiles ? `Upload Complete!` : 'Upload Successful!'}</h3>
+
+                    {isMultipleFiles && multiFileResults.length > 0 ? (
+                      <div className={styles.multiFileResults}>
+                        {multiFileResults.map((result, index) => (
+                          <div
+                            key={index}
+                            className={`${styles.fileResult} ${result.success ? styles.success : styles.error}`}
+                          >
+                            <div className={styles.fileResultHeader}>
+                              <span className={styles.fileResultName}>{result.filename}</span>
+                              <span
+                                className={`${styles.fileResultStatus} ${result.success ? styles.success : styles.error}`}
+                              >
+                                {result.success ? 'Success' : 'Failed'}
+                              </span>
+                            </div>
+                            {result.success && result.reference && (
+                              <div
+                                className={styles.fileResultReference}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(result.reference);
+                                }}
+                                title="Click to copy reference"
+                              >
+                                {result.reference}
+                              </div>
+                            )}
+                            {!result.success && result.error && (
+                              <div className={styles.fileResultError}>{result.error}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : nftCollectionResult ? (
+                      // NFT Collection upload success
+                      <div className={styles.nftCollectionResults}>
+                        <div className={styles.nftCollectionSummary}>
+                          <h4>NFT Collection Uploaded Successfully!</h4>
+                          <p>
+                            {nftCollectionResult.totalImages} images and{' '}
+                            {nftCollectionResult.totalMetadata} metadata files processed
+                          </p>
+                        </div>
+
+                        <div className={styles.nftReferenceGroup}>
+                          <div className={styles.referenceBox}>
+                            <p>
+                              <strong>Images Reference:</strong>
+                            </p>
+                            <div className={styles.referenceCopyWrapper}>
+                              <code
+                                className={styles.referenceCode}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(
+                                    nftCollectionResult.imagesReference
+                                  );
+                                  const codeEl = document.querySelectorAll(
+                                    `.${styles.referenceCode}`
+                                  )[0];
+                                  if (codeEl) {
+                                    codeEl.setAttribute('data-copied', 'true');
+                                    setTimeout(() => {
+                                      codeEl.setAttribute('data-copied', 'false');
+                                    }, 2000);
+                                  }
+                                }}
+                                data-copied="false"
+                              >
+                                {nftCollectionResult.imagesReference}
+                              </code>
+                            </div>
+                            <div className={styles.linkButtonsContainer}>
+                              <button
+                                className={`${styles.referenceLink} ${styles.copyLinkButton}`}
+                                onClick={() => {
+                                  const url = `${BEE_GATEWAY_URL}${nftCollectionResult.imagesReference}/`;
+                                  navigator.clipboard.writeText(url);
+                                  const button = document.querySelectorAll(
+                                    `.${styles.copyLinkButton}`
+                                  )[0];
+                                  if (button) {
+                                    const originalText = button.textContent;
+                                    button.textContent = 'Link copied!';
+                                    setTimeout(() => {
+                                      button.textContent = originalText;
+                                    }, 2000);
+                                  }
+                                }}
+                              >
+                                Copy images link
+                              </button>
+                              <a
+                                href={`${BEE_GATEWAY_URL}${nftCollectionResult.imagesReference}/`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.referenceLink}
+                              >
+                                View images
+                              </a>
+                            </div>
+                          </div>
+
+                          <div className={styles.referenceBox}>
+                            <p>
+                              <strong>Metadata Reference:</strong>
+                            </p>
+                            <div className={styles.referenceCopyWrapper}>
+                              <code
+                                className={styles.referenceCode}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(
+                                    nftCollectionResult.metadataReference
+                                  );
+                                  const codeEl = document.querySelectorAll(
+                                    `.${styles.referenceCode}`
+                                  )[1];
+                                  if (codeEl) {
+                                    codeEl.setAttribute('data-copied', 'true');
+                                    setTimeout(() => {
+                                      codeEl.setAttribute('data-copied', 'false');
+                                    }, 2000);
+                                  }
+                                }}
+                                data-copied="false"
+                              >
+                                {nftCollectionResult.metadataReference}
+                              </code>
+                            </div>
+                            <div className={styles.linkButtonsContainer}>
+                              <button
+                                className={`${styles.referenceLink} ${styles.copyLinkButton}`}
+                                onClick={() => {
+                                  const url = `${BEE_GATEWAY_URL}${nftCollectionResult.metadataReference}/`;
+                                  navigator.clipboard.writeText(url);
+                                  const button = document.querySelectorAll(
+                                    `.${styles.copyLinkButton}`
+                                  )[1];
+                                  if (button) {
+                                    const originalText = button.textContent;
+                                    button.textContent = 'Link copied!';
+                                    setTimeout(() => {
+                                      button.textContent = originalText;
+                                    }, 2000);
+                                  }
+                                }}
+                              >
+                                Copy metadata link
+                              </button>
+                              <a
+                                href={`${BEE_GATEWAY_URL}${nftCollectionResult.metadataReference}/`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.referenceLink}
+                              >
+                                View metadata
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Single file upload success
+                      <div className={styles.referenceBox}>
+                        <p>Reference:</p>
+                        <div className={styles.referenceCopyWrapper}>
+                          <code
+                            className={styles.referenceCode}
+                            onClick={() => {
+                              navigator.clipboard.writeText(statusMessage.reference || '');
+                              // Show a temporary "Copied!" message by using a data attribute
+                              const codeEl = document.querySelector(`.${styles.referenceCode}`);
+                              if (codeEl) {
+                                codeEl.setAttribute('data-copied', 'true');
+                                setTimeout(() => {
+                                  codeEl.setAttribute('data-copied', 'false');
+                                }, 2000);
+                              }
+                            }}
+                            data-copied="false"
+                          >
+                            {statusMessage.reference}
+                          </code>
+                        </div>
+                        <div className={styles.linkButtonsContainer}>
+                          <button
+                            className={`${styles.referenceLink} ${styles.copyLinkButton}`}
+                            onClick={() => {
+                              const url =
+                                statusMessage.filename && !isArchiveFile(statusMessage.filename)
+                                  ? `${BEE_GATEWAY_URL}${statusMessage.reference}/${statusMessage.filename}`
+                                  : `${BEE_GATEWAY_URL}${statusMessage.reference}/`;
+                              navigator.clipboard.writeText(url);
+
+                              // Show a temporary message using a more specific selector
+                              const button = document.querySelector(`.${styles.copyLinkButton}`);
+                              if (button) {
+                                const originalText = button.textContent;
+                                button.textContent = 'Link copied!';
+                                setTimeout(() => {
+                                  button.textContent = originalText;
+                                }, 2000);
+                              }
+                            }}
+                          >
+                            Copy link
+                          </button>
+                          <a
+                            href={
+                              statusMessage.filename && !isArchiveFile(statusMessage.filename)
+                                ? `${BEE_GATEWAY_URL}${statusMessage.reference}/${statusMessage.filename}`
+                                : `${BEE_GATEWAY_URL}${statusMessage.reference}/`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.referenceLink}
+                          >
+                            Open link
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {uploadStampInfo && (
+                      <div className={styles.stampInfoBox}>
+                        <h4>Storage Stamps Details</h4>
+                        <div className={styles.stampDetails}>
+                          <div className={styles.stampDetail}>
+                            <span>Utilization:</span>
+                            <span>
+                              {getStampUsage(
+                                uploadStampInfo.utilization || 0,
+                                uploadStampInfo.depth || 0
+                              ).toFixed(2)}
+                              %
+                            </span>
+                          </div>
+                          <div className={styles.stampDetail}>
+                            <span>Total Size:</span>
+                            <span>{uploadStampInfo.totalSize}</span>
+                          </div>
+                          <div className={styles.stampDetail}>
+                            <span>Created:</span>
+                            <span>{uploadStampInfo.createdDate || 'Unknown'}</span>
+                          </div>
+                          <div className={styles.stampDetail}>
+                            <span>Expires in:</span>
+                            <span>{formatExpiryTime(uploadStampInfo.batchTTL)}</span>
+                          </div>
+                        </div>
+                        <div className={styles.utilizationBarContainer}>
+                          <div
+                            className={styles.utilizationBar}
+                            style={{
+                              width: `${getStampUsage(uploadStampInfo.utilization || 0, uploadStampInfo.depth || 0).toFixed(2)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      className={styles.closeSuccessButton}
+                      onClick={() => {
+                        setShowOverlay(false);
+                        setUploadStep('idle');
+                        setStatusMessage({ step: '', message: '' });
+                        setIsLoading(false);
+                        setExecutionResult(null);
+                        setSelectedFile(null);
+                        setSelectedFiles([]);
+                        setIsMultipleFiles(false);
+                        setMultiFileResults([]);
+                        setIsWebpageUpload(false);
+                        setIsTarFile(false);
+                        setIsFolderUpload(false);
+                        setIsDistributing(false);
+                        setUploadStampInfo(null);
+                        setIsNFTCollection(false);
+                        setNftCollectionResult(null);
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+
+                {topUpCompleted && (
+                  <div className={styles.successMessage}>
+                    <div className={styles.successIcon}>✓</div>
+                    <h3>Batch Topped Up Successfully!</h3>
+                    <div className={styles.referenceBox}>
+                      <p>Batch ID:</p>
+                      <div className={styles.referenceCopyWrapper}>
+                        <code
+                          className={styles.referenceCode}
+                          onClick={() => {
+                            navigator.clipboard.writeText(topUpInfo?.batchId || '');
+                            // Show a temporary "Copied!" message
+                            const codeEl = document.querySelector(`.${styles.referenceCode}`);
+                            if (codeEl) {
+                              codeEl.setAttribute('data-copied', 'true');
+                              setTimeout(() => {
+                                codeEl.setAttribute('data-copied', 'false');
+                              }, 2000);
+                            }
+                          }}
+                          data-copied="false"
+                        >
+                          {topUpInfo?.batchId}
+                        </code>
+                      </div>
+                    </div>
+
+                    <div className={styles.stampInfoBox}>
+                      <h4>Top-Up Details</h4>
+                      <div className={styles.stampDetails}>
+                        <div className={styles.stampDetail}>
+                          <span>Added Duration:</span>
+                          <span>{topUpInfo?.days} days</span>
+                        </div>
+                        <div className={styles.stampDetail}>
+                          <span>Cost:</span>
+                          <span>${Number(topUpInfo?.cost || 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <div className={styles.updateDelayNotice}>
+                        ⏱️ It will take a few minutes for the stamp expiry to be updated
+                      </div>
+                    </div>
+
+                    <button
+                      className={styles.closeSuccessButton}
+                      onClick={() => {
+                        setShowOverlay(false);
+                        setTopUpCompleted(false);
+                        setTopUpInfo(null);
+                        setStatusMessage({ step: '', message: '' });
+                        setIsLoading(false);
+                        setExecutionResult(null);
+                        setIsNewStampCreated(false); // Reset the new stamp warning
+
+                        // Clear the topup parameter from URL and return to clean state
+                        if (typeof window !== 'undefined') {
+                          const url = new URL(window.location.href);
+                          if (url.searchParams.has('topup')) {
+                            // Remove the topup parameter and navigate to clean URL
+                            window.location.href = window.location.origin;
+                          }
+                        }
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      ) : showHelp ? (
+        <HelpSection
+          nodeAddress={nodeAddress}
+          beeApiUrl={beeApiUrl}
+          setBeeApiUrl={setBeeApiUrl}
+          isCustomNode={isCustomNode}
+          setIsCustomNode={setIsCustomNode}
+          isCustomRpc={isCustomRpc}
+          setIsCustomRpc={setIsCustomRpc}
+          customRpcUrl={customRpcUrl}
+          setCustomRpcUrl={setCustomRpcUrl}
+          useCustomSlippage={useCustomSlippage}
+          setUseCustomSlippage={setUseCustomSlippage}
+          customSlippagePercent={customSlippagePercent}
+          setCustomSlippagePercent={setCustomSlippagePercent}
+        />
+      ) : showStampList ? (
+        <StampListSection
+          setShowStampList={setShowStampList}
+          address={address}
+          beeApiUrl={beeApiUrl}
+          nodeAddress={nodeAddress}
+          setPostageBatchId={setPostageBatchId}
+          setShowOverlay={setShowOverlay}
+          setUploadStep={setUploadStep}
+        />
+      ) : showUploadHistory ? (
+        <UploadHistorySection address={address} setShowUploadHistory={setShowUploadHistory} />
+      ) : null}
+    </div>
+  );
+};
+
+export default SwapComponent;

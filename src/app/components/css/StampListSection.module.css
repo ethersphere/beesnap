@@ -1,0 +1,268 @@
+.stampListContainer {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.stampListContent {
+  background-color: #0f131ac7;
+  border-radius: 12px;
+  padding: 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid #30363d;
+}
+
+.stampListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #30363d;
+}
+
+.stampListHeader h2 {
+  color: #ffffff;
+  margin-bottom: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.stampListCloseButton {
+  padding: 0.75rem 1.5rem;
+  background-color: transparent;
+  color: white;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  min-width: 120px;
+  transition: background-color 0.2s;
+}
+
+.stampListCloseButton:hover {
+  background-color: rgba(48, 54, 61, 0.5);
+}
+
+.stampListItem {
+  background: #161b22;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  border: 1px solid #30363d;
+}
+
+.stampListId {
+  font-family: monospace;
+  font-size: 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  position: relative;
+  word-break: break-all;
+}
+
+.stampListId:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.stampListId[data-copied="true"] {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.stampListId[data-copied="true"]::after {
+  content: "Copied!";
+  position: absolute;
+  right: 8px;
+  font-size: 12px;
+  color: #28a745;
+}
+
+.stampListDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.9em;
+  color: #8b949e;
+}
+
+.stampListLoading {
+  text-align: center;
+  padding: 20px;
+  color: #8b949e;
+}
+
+.stampListEmpty {
+  text-align: center;
+  padding: 20px;
+  color: #8b949e;
+  background: #161b22;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+}
+
+.stampActions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 12px;
+  gap: 10px;
+}
+
+.uploadWithStampButton {
+  margin-top: 0;
+  padding: 10px 16px;
+  background-color: #ff7a00;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  flex: 1;
+}
+
+.uploadWithStampButton:hover {
+  background-color: #e56e00;
+}
+
+.uploadWithStampButton:disabled {
+  background-color: #30363d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.uploadWithStampButton:disabled:hover {
+  background-color: #30363d;
+}
+
+.refreshButton {
+  margin-top: 0;
+  padding: 10px 16px;
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.refreshButton:hover {
+  background-color: #4b5563;
+}
+
+.refreshButton:disabled {
+  background-color: #30363d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.refreshButton:disabled:hover {
+  background-color: #30363d;
+}
+
+.topUpButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background-color: #2a4064;
+  color: white;
+  text-decoration: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.topUpButton:hover {
+  background-color: #35507f;
+}
+
+.topUpButton:disabled {
+  background-color: #30363d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.topUpButton:disabled:hover {
+  background-color: #30363d;
+}
+
+.expiryWarning {
+  color: #f85149 !important;
+  font-weight: 600;
+}
+
+.expiryKhaki {
+  color: #d4a11a !important;
+  font-weight: 600;
+}
+
+.propagatingMessage {
+  margin: 8px 0;
+  padding: 0;
+}
+
+.propagatingText {
+  color: #ff7a00 !important;
+  font-weight: 500;
+  background-color: rgba(255, 122, 0, 0.1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 122, 0, 0.3);
+  font-size: 0.85em;
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.resetButtonContainer {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #30363d;
+}
+
+.resetButton {
+  background: transparent;
+  border: 1px solid #30363d;
+  color: #8b949e;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  opacity: 0.5;
+}
+
+.resetButton:hover {
+  opacity: 1;
+  background-color: rgba(48, 54, 61, 0.3);
+  border-color: #6e7681;
+  color: #f0f6fc;
+}

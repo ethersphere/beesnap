@@ -1,0 +1,211 @@
+.selectWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select {
+  flex: 1;
+  padding: 10px;
+  padding-left: 36px; /* Space for logo */
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-size: 16px;
+  padding-right: 120px;
+  width: 100%;
+}
+
+.tokenBalance {
+  position: absolute;
+  right: 30px;
+  text-align: right;
+  pointer-events: none;
+}
+
+.selectedTokenInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.balanceInfo {
+  text-align: right;
+}
+
+.balanceAmount {
+  font-size: 16px;
+  color: #333;
+}
+
+.balanceUsd {
+  font-size: 12px;
+  color: #666;
+}
+
+.tokenOptionContent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.tokenLogo {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: contain;
+}
+
+.tokenSymbol {
+  font-weight: 500;
+}
+
+.tokenBalance {
+  color: #666;
+  margin-left: auto;
+}
+
+.tokenOption {
+  padding: 8px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dropdownContainer {
+  position: relative;
+  width: 100%;
+}
+
+.dropdownButton {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 16px;
+  cursor: default;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dropdownButton.clickable {
+  cursor: pointer;
+}
+
+.dropdownButton.open {
+  border-color: #ff7a00;
+  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.2);
+}
+
+.placeholder {
+  color: #8b949e;
+  font-size: 14px;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 4px;
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #161b22;
+}
+
+.dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdown::-webkit-scrollbar-track {
+  background: #161b22;
+  border-radius: 4px;
+}
+
+.dropdown::-webkit-scrollbar-thumb {
+  background-color: #30363d;
+  border-radius: 4px;
+  border: 2px solid #161b22;
+}
+
+.option {
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  background-color: #161b22;
+  color: #ffffff;
+  border-bottom: 1px solid #30363d;
+  transition: background-color 0.2s;
+}
+
+.option:last-child {
+  border-bottom: none;
+}
+
+.option:hover {
+  background-color: #1f2937;
+}
+
+.option.selected {
+  background-color: #2d3748;
+}
+
+.tokenLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tokenLogo {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 50%;
+  background-color: #30363d;
+  object-fit: contain;
+}
+
+.tokenSymbol {
+  font-weight: 500;
+}
+
+.tokenRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #ffffff;
+}
+
+.tokenUsdValue {
+  font-size: 12px;
+  color: #8b949e;
+}
+
+/* Add these styles to remove dropdown arrows */
+.dropdown,
+.searchInput {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image: none !important;
+  background: #161b22 !important; /* Override any background that might have an arrow */
+}
+
+/* For Firefox */
+.dropdown::-ms-expand {
+  display: none;
+}

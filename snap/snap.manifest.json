@@ -1,0 +1,30 @@
+{
+  "version": "0.1.0",
+  "description": "Buy Swarm postage stamps and upload files to Swarm via your Bee node — directly from MetaMask.",
+  "proposedName": "Beeport",
+  "source": {
+    "shasum": "izMzKM4Ihh5FV9YxFFBtqUuwOTA9m3Zf8cnBsz930So=",
+    "location": {
+      "npm": {
+        "filePath": "dist/bundle.js",
+        "iconPath": "images/logo.svg",
+        "packageName": "@beeport/snap",
+        "registry": "https://registry.npmjs.org/"
+      }
+    }
+  },
+  "initialPermissions": {
+    "endowment:rpc": {
+      "dapps": true,
+      "snaps": false
+    },
+    "endowment:network-access": {},
+    "endowment:page-home": {},
+    "snap_dialog": {},
+    "snap_manageState": {},
+    "snap_notify": {},
+    "snap_getEntropy": {}
+  },
+  "platformVersion": "6.24.0",
+  "manifestVersion": "0.1"
+}

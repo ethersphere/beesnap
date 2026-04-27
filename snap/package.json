@@ -1,0 +1,33 @@
+{
+  "name": "@beeport/snap",
+  "version": "0.1.0",
+  "description": "Beeport Snap — buy Swarm postage stamps and upload files from inside MetaMask.",
+  "main": "dist/bundle.js",
+  "files": [
+    "dist/",
+    "images/",
+    "snap.manifest.json"
+  ],
+  "scripts": {
+    "build": "mm-snap build",
+    "build:clean": "rimraf dist && mm-snap build",
+    "serve": "mm-snap serve",
+    "watch": "mm-snap watch",
+    "manifest": "mm-snap manifest --fix",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@metamask/snaps-sdk": "^6.24.0",
+    "luxon": "^3.7.2",
+    "viem": "^2.25.0"
+  },
+  "devDependencies": {
+    "@metamask/snaps-cli": "^6.6.0",
+    "@types/node": "^20.0.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
