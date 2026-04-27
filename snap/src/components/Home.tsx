@@ -1,8 +1,8 @@
 /**
  * Root home screen.
  *
- * Shows the Snap-derived account address (from your seed phrase) plus its
- * xDAI balance, so the user always knows whether they need to fund the account
+ * Shows the Snap-derived account address (from your seed phrase) plus native
+ * balances on every “pay from” chain, so the user can fund the right network
  * before buying stamps. Then four primary navigation buttons that hand off to
  * the buy / upload / stamps-list / uploads-list screens via `onUserInput`.
  */
@@ -22,6 +22,8 @@ import {
   Address,
 } from '@metamask/snaps-sdk/jsx';
 
+import { GNOSIS_CHAIN_ID } from '../lib/constants';
+
 export const NAV_EVENTS = {
   HOME: 'nav-home',
   STAMPS: 'nav-stamps',
@@ -31,24 +33,34 @@ export const NAV_EVENTS = {
   SETTINGS: 'nav-settings',
 } as const;
 
+export type HomeChainBalance = {
+  chainId: number;
+  name: string;
+  symbol: string;
+  /** Native token balance in wei. null = couldn't fetch. */
+  wei: bigint | null;
+};
+
 export interface HomeProps {
   /** The Snap-derived Beesnap account. Always present once Snap is installed. */
   beesnapAddress: `0x${string}`;
-  /** xDAI balance of that account in wei. null = couldn't fetch. */
-  beesnapBalanceWei: bigint | null;
+  /**
+   * Native balance per `SOURCE_CHAINS` network (Gnosis, Ethereum, Base, …).
+   */
+  chainBalances: HomeChainBalance[];
 }
 
-/** Threshold below which we warn the user to top up. ~$0.05 worth of xDAI. */
+/** Threshold below which we warn the user to top up. ~$0.05 worth of xDAI on Gnosis. */
 const LOW_BALANCE_THRESHOLD_WEI = 50_000_000_000_000_000n; // 0.05 xDAI
 
-export function Home({ beesnapAddress, beesnapBalanceWei }: HomeProps) {
-  const balanceLabel =
-    beesnapBalanceWei === null
-      ? 'unavailable'
-      : `${formatXdai(beesnapBalanceWei)} xDAI`;
+export function Home({ beesnapAddress, chainBalances }: HomeProps) {
+  const gnosisWei = chainBalances.find(
+    (c) => c.chainId === GNOSIS_CHAIN_ID,
+  )?.wei;
   const lowBalance =
-    beesnapBalanceWei !== null &&
-    beesnapBalanceWei < LOW_BALANCE_THRESHOLD_WEI;
+    gnosisWei !== null &&
+    gnosisWei !== undefined &&
+    gnosisWei < LOW_BALANCE_THRESHOLD_WEI;
 
   return (
     <Container>
@@ -65,8 +77,9 @@ export function Home({ beesnapAddress, beesnapBalanceWei }: HomeProps) {
           <Heading size="sm">Your Beesnap account</Heading>
           <Text>
             This address is derived from your secret recovery phrase and is
-            unique to this Snap. Send xDAI here to fund stamp purchases and
-            uploads.
+            unique to this Snap. Gnosis (xDAI) pays the stamp; when you use Buy
+            from other networks, fund the native token on that chain. Balances
+            below are the same address on each network.
           </Text>
           <Row label="Address">
             <Address address={beesnapAddress} />
@@ -74,9 +87,18 @@ export function Home({ beesnapAddress, beesnapBalanceWei }: HomeProps) {
           <Row label="Copy">
             <Copyable value={beesnapAddress} />
           </Row>
-          <Row label="Balance">
-            <Text>{balanceLabel}</Text>
-          </Row>
+          {chainBalances.map((c) => {
+            const label = `${c.name} (${c.symbol})`;
+            const v =
+              c.wei === null
+                ? 'unavailable'
+                : `${formatNativeWei(c.wei)} ${c.symbol}`;
+            return (
+              <Row key={`bal-${String(c.chainId)}`} label={label}>
+                <Text>{v}</Text>
+              </Row>
+            );
+          })}
         </Section>
 
         {lowBalance ? (
@@ -108,15 +130,12 @@ export function Home({ beesnapAddress, beesnapBalanceWei }: HomeProps) {
 }
 
 /**
- * Format wei as a fixed-precision xDAI amount. xDAI has 18 decimals, same as
- * ETH. We render to 4 decimals because that's enough for the user to see the
- * difference between "fully funded" and "almost empty" without overwhelming
- * them with all 18 digits.
+ * Format 18-decimal native wei (ETH, xDAI, POL, …) for display. Four fractional
+ * digits: enough to see "funded" vs "empty" without overwhelming the UI.
  */
-function formatXdai(wei: bigint): string {
+function formatNativeWei(wei: bigint): string {
   const whole = wei / 10n ** 18n;
   const fractional = wei % 10n ** 18n;
-  // Pad to 18, take leading 4 digits for display.
   const fracStr = fractional.toString().padStart(18, '0').slice(0, 4);
   return `${whole.toString()}.${fracStr}`;
 }

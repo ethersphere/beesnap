@@ -29,12 +29,12 @@ import {
 import { Box, Heading, Text } from '@metamask/snaps-sdk/jsx';
 
 import { getBeesnapAddress } from './lib/wallet';
-import { getGnosisBalance } from './lib/ethereum';
+import { getNativeBalance } from './lib/ethereum';
 import {
   fetchNodeWalletAddress,
   syncStoredNodeAddressWithWallet,
 } from './lib/bee';
-import { DEFAULT_BEE_API_URL } from './lib/constants';
+import { DEFAULT_BEE_API_URL, SOURCE_CHAINS } from './lib/constants';
 
 /**
  * Mirrors the discriminated-union shape of `SettingsFormProps['walletProbe']`.
@@ -53,7 +53,7 @@ import {
 } from './lib/state';
 import { describeError } from './lib/utils';
 
-import { Home, NAV_EVENTS } from './components/Home';
+import { Home, NAV_EVENTS, type HomeChainBalance } from './components/Home';
 import {
   StampsList,
   loadStamps,
@@ -135,14 +135,18 @@ async function loadHomeProps() {
   const beesnapAddress = (await getBeesnapAddress()) as `0x${string}`;
   // Remember the address so it shows up consistently across screens.
   await rememberAccount(beesnapAddress);
-  let beesnapBalanceWei: bigint | null = null;
-  try {
-    beesnapBalanceWei = await getGnosisBalance(beesnapAddress);
-  } catch {
-    // Don't block the home screen on a balance fetch failure — surface as null.
-    beesnapBalanceWei = null;
-  }
-  return { beesnapAddress, beesnapBalanceWei };
+  const chainBalances: HomeChainBalance[] = await Promise.all(
+    SOURCE_CHAINS.map(async (c) => {
+      try {
+        const wei = await getNativeBalance(beesnapAddress, c.id);
+        return { chainId: c.id, name: c.name, symbol: c.symbol, wei };
+      } catch (err) {
+        console.warn(`[home] native balance chain ${c.id} failed:`, err);
+        return { chainId: c.id, name: c.name, symbol: c.symbol, wei: null };
+      }
+    }),
+  );
+  return { beesnapAddress, chainBalances };
 }
 
 // ── onHomePage ───────────────────────────────────────────────────────────────

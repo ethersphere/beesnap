@@ -185,16 +185,23 @@ export async function chainJsonRpcCall<T>(
   );
 }
 
-async function gnosisRpcCall<T>(method: string, params: unknown[]): Promise<T> {
-  return chainJsonRpcCall<T>(GNOSIS_CHAIN_ID, method, params);
-}
-
 // ── Read methods we need to sign + send a tx ─────────────────────────────────
 
-/** xDAI balance of any address (decimal-string wei). */
-export async function getGnosisBalance(address: string): Promise<bigint> {
-  const hex = await gnosisRpcCall<string>('eth_getBalance', [address, 'latest']);
+/** Native balance (wei) of `address` on a chain in {@link CHAIN_RPCS}. */
+export async function getNativeBalance(
+  address: string,
+  chainId: number,
+): Promise<bigint> {
+  const hex = await chainJsonRpcCall<string>(chainId, 'eth_getBalance', [
+    address,
+    'latest',
+  ]);
   return BigInt(hex);
+}
+
+/** xDAI (native) balance on Gnosis. */
+export async function getGnosisBalance(address: string): Promise<bigint> {
+  return getNativeBalance(address, GNOSIS_CHAIN_ID);
 }
 
 async function getNonce(chainId: number, address: string): Promise<number> {
