@@ -34,18 +34,6 @@
  */
 export const DEFAULT_BEE_API_URL = 'http://localhost:1633';
 
-/**
- * Maximum decoded file size we allow for Snap uploads.
- *
- * Chromium caps `chrome.runtime.sendMessage` (and the same structured-clone
- * path MetaMask uses to talk to Snaps) at **64 MiB per message**. File bytes
- * are moved as base64 inside JSON, which grows payload by roughly 4/3, so the
- * hard ceiling on raw file size is well below 64 MiB. This constant stays on
- * the safe side so file pick + `snap_getInterfaceState` + upload do not trip
- * the browser limit. Apps cannot raise that cap — it is fixed in Chromium.
- */
-export const MAX_SNAP_UPLOAD_BINARY_BYTES = 40 * 1024 * 1024;
-
 /** Public Bee gateway used for hyperlinks to uploaded references. */
 export const BEE_GATEWAY_URL = 'https://bzz.link/bzz/';
 

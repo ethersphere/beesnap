@@ -12,8 +12,8 @@
  *  - There is no upload progress; Snap `fetch` doesn't expose progress events
  *    and `XMLHttpRequest` is unavailable. Callers should set "uploading…" before
  *    awaiting `uploadFile` and treat the resolved value as completion.
- *  - File size is capped by the Snap / MetaMask bridge (Chromium extension
- *    messages, ~64 MiB max; see `MAX_SNAP_UPLOAD_BINARY_BYTES` in constants).
+ *  - Files are bounded by what `FileInput` returns as base64 — practically a
+ *    few hundred MB at most before performance degrades sharply.
  */
 
 import { DEFAULT_BEE_API_URL, SWARM_DEFERRED_UPLOAD } from './constants';
