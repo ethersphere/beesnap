@@ -1,14 +1,14 @@
 {
   "version": "0.1.0",
-  "description": "Swarm bee snap integration with MetaMask Snaps.",
-  "proposedName": "Beesnap",
+  "description": "Ethereum Swarm — postage storage and uploads via MetaMask Snaps.",
+  "proposedName": "Ethereum Swarm MetaMask extension",
   "repository": {
     "type": "git",
     "url": "https://github.com/0xCardiE/beesnap.git",
     "directory": "snap"
   },
   "source": {
-    "shasum": "Qziupq8AUY94DOTky8wUUznb1GNMN1Q2kqjY/9neXI0=",
+    "shasum": "VTPC8H8JeHfEnEcMWrop54mxe7WcBX+hoTZU7pwwaQQ=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",

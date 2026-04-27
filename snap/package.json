@@ -1,7 +1,7 @@
 {
   "name": "@beesnap/snap",
   "version": "0.1.0",
-  "description": "Beesnap — Swarm bee snap integration with MetaMask Snaps.",
+  "description": "Ethereum Swarm MetaMask extension — Swarm bee storage with Snaps (Beesnap).",
   "repository": {
     "type": "git",
     "url": "https://github.com/0xCardiE/beesnap.git",
@@ -16,6 +16,7 @@
   "scripts": {
     "build": "mm-snap build",
     "build:clean": "rimraf dist && mm-snap build",
+    "dev": "mm-snap watch",
     "serve": "mm-snap serve",
     "watch": "mm-snap watch",
     "manifest": "mm-snap manifest --fix",

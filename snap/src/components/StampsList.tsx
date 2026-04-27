@@ -34,6 +34,55 @@ import { getState } from '../lib/state';
 import { describeError, formatTTL, getStampUsagePercent } from '../lib/utils';
 import { NAV_EVENTS } from './Home';
 
+/** Toggle the single “other Bee node” group at the bottom of My storage. */
+export const STAMPS_TOGGLE_OTHER_GROUP = 'stamps-toggle-other';
+
+/**
+ * `snap_updateInterface` JSON-serializes `context`. `RegistryBatch` uses
+ * bigint for on-chain uints, which `JSON.stringify` cannot handle — use this
+ * for `context.stamps` and {@link deserializeStampsFromContext} on read.
+ */
+export function serializeStampsForContext(d: StampsLoadResult): unknown {
+  return {
+    ...d,
+    batches: d.batches.map((b) => ({
+      ...b,
+      totalAmount: b.totalAmount.toString(),
+      normalisedBalance: b.normalisedBalance.toString(),
+    })),
+  };
+}
+
+export function deserializeStampsFromContext(raw: unknown): StampsLoadResult {
+  if (raw == null || typeof raw !== 'object') {
+    throw new Error('Invalid stamps context');
+  }
+  const o = raw as {
+    batches: Array<{
+      batchId: `0x${string}`;
+      totalAmount: string;
+      normalisedBalance: string;
+      nodeAddress: string;
+      payer: string;
+      depth: number;
+      bucketDepth: number;
+      immutable: boolean;
+      timestamp: number;
+    }>;
+    stamps: StampsLoadResult['stamps'];
+    hadStampError: boolean;
+    registryError?: string;
+  };
+  return {
+    ...o,
+    batches: o.batches.map((b) => ({
+      ...b,
+      totalAmount: BigInt(b.totalAmount),
+      normalisedBalance: BigInt(b.normalisedBalance),
+    })) as RegistryBatch[],
+  };
+}
+
 /** What we know about a single stamp after one round of fetching. */
 export interface StampEntry {
   /** Bee /stamps response (null when not yet resolved). */
@@ -161,8 +210,40 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
   return { batches, stamps, registryError: undefined, hadStampError };
 }
 
-export function StampsList(props: StampsLoadResult) {
-  const { batches, stamps, registryError, hadStampError } = props;
+export type StampsListProps = StampsLoadResult & {
+  /** Wrong-node storages: one group at the bottom, closed by default. */
+  otherNodeGroupOpen?: boolean;
+};
+
+type BatchView = {
+  b: RegistryBatch;
+  origIndex: number;
+  entry: StampEntry | undefined;
+};
+
+function partitionBatches(
+  batches: RegistryBatch[],
+  stamps: StampsLoadResult['stamps'],
+): { working: BatchView[]; other: BatchView[] } {
+  const working: BatchView[] = [];
+  const other: BatchView[] = [];
+  for (let i = 0; i < batches.length; i += 1) {
+    const b = batches[i]!;
+    const idNoPrefix = b.batchId.slice(2);
+    const entry = stamps[idNoPrefix];
+    const row: BatchView = { b, origIndex: i, entry };
+    if (entry?.boundToCurrentNode === false) {
+      other.push(row);
+    } else {
+      working.push(row);
+    }
+  }
+  return { working, other };
+}
+
+export function StampsList(props: StampsListProps) {
+  const { batches, stamps, registryError, hadStampError, otherNodeGroupOpen = false } =
+    props;
 
   if (registryError) {
     return (
@@ -199,6 +280,67 @@ export function StampsList(props: StampsLoadResult) {
     );
   }
 
+  const { working, other } = partitionBatches(batches, stamps);
+
+  const oneStorage = (v: BatchView, showItemWrongNodeBanner: boolean) => {
+    const { b, origIndex, entry } = v;
+    const n = origIndex + 1;
+    const info = entry?.info ?? null;
+    const usagePct = info
+      ? getStampUsagePercent(info.utilization, info.depth)
+      : null;
+    const ttl = info ? formatTTL(info.batchTTL) : 'unknown';
+    return (
+      <Box key={b.batchId}>
+        <Heading size="sm">{`Storage #${String(n)}`}</Heading>
+        <Section>
+          <Row label="ID">
+            <Copyable value={b.batchId} />
+          </Row>
+          <Row label="Capacity">
+            <Text>{`depth ${b.depth}`}</Text>
+          </Row>
+          <Row label="Used">
+            <Text>
+              {usagePct === null
+                ? 'unavailable'
+                : `${usagePct.toFixed(2)}%`}
+            </Text>
+          </Row>
+          <Row label="Expires in">
+            <Text>{ttl}</Text>
+          </Row>
+          <Row label="Node">
+            <Address address={b.nodeAddress as `0x${string}`} />
+          </Row>
+        </Section>
+
+        {entry?.boundToCurrentNode === true && !info ? (
+          <Banner severity="info" title="Details still loading on Bee">
+            <Text>
+              This storage is on the Bee node you are using. It can take 1–2
+              minutes after a purchase to propagate — then used % and time left
+              will show here. Tap Refresh or wait; this screen can update on
+              its own.
+            </Text>
+          </Banner>
+        ) : null}
+
+        {showItemWrongNodeBanner && entry?.boundToCurrentNode === false ? (
+          <Banner severity="warning" title="Bound to a different Bee node">
+            <Text>
+              This storage was created against another Bee node and can't be
+              used from your current one. Either point the Snap at the original
+              Bee node in Settings, or buy new storage on this node.
+            </Text>
+          </Banner>
+        ) : null}
+
+        <Divider />
+      </Box>
+    );
+  };
+
   return (
     <Container>
       <Box>
@@ -220,59 +362,63 @@ export function StampsList(props: StampsLoadResult) {
           <Text>{' '}</Text>
         )}
 
-        {batches.map((b, i) => {
-          const idNoPrefix = b.batchId.slice(2);
-          const entry = stamps[idNoPrefix];
-          const info = entry?.info ?? null;
-          const usagePct = info
-            ? getStampUsagePercent(info.utilization, info.depth)
-            : null;
-          const ttl = info ? formatTTL(info.batchTTL) : 'unknown';
-          return (
-            <Section key={`s-${i}`}>
-              <Heading size="sm">{`Storage #${i + 1}`}</Heading>
-              <Row label="ID">
-                <Copyable value={b.batchId} />
-              </Row>
-              <Row label="Capacity">
-                <Text>{`depth ${b.depth}`}</Text>
-              </Row>
-              <Row label="Used">
-                <Text>
-                  {usagePct === null
-                    ? 'unavailable'
-                    : `${usagePct.toFixed(2)}%`}
-                </Text>
-              </Row>
-              <Row label="Expires in">
-                <Text>{ttl}</Text>
-              </Row>
-              <Row label="Node">
-                <Address address={b.nodeAddress as `0x${string}`} />
-              </Row>
+        <Section>
+          <Heading size="sm">Storages on this Bee node</Heading>
+          <Text>
+            The following {working.length === 1 ? 'entry is' : 'entries are'} usable
+            with the API URL in Settings, with full details shown.
+            {other.length > 0
+              ? ' Storages on another node are in one group at the bottom (hidden until you open it).'
+              : ''}
+          </Text>
 
-              {/* If this storage was minted against a different Bee node,
-                  the current node will reject every operation against it
-                  ("issuer does not exist"). Surface that clearly so the
-                  user knows it's not a transient error. */}
-              {entry?.boundToCurrentNode === false ? (
+          <Box>
+            {working.length > 0 ? (
+              working.map((v) => oneStorage(v, false))
+            ) : (
+              <Text>
+                None. Everything in your list is bound to a different Bee node
+                than the one in Settings — use the group below, or add storage
+                for this node from Buy.
+              </Text>
+            )}
+          </Box>
+        </Section>
+
+        {other.length > 0 ? (
+          <Section>
+            <Heading size="sm">Storages on another node</Heading>
+            <Text>
+              {`These ${String(other.length)} ${
+                other.length === 1 ? 'item was' : 'items were'
+              } created for a different node than the one in Settings. Open the
+              list to see full details.`}
+            </Text>
+            <Button name={STAMPS_TOGGLE_OTHER_GROUP}>
+              {otherNodeGroupOpen
+                ? `Hide ${String(other.length)} on other node${
+                    other.length === 1 ? '' : 's'
+                  } (tap to collapse)`
+                : `Show ${String(other.length)} on other node${
+                    other.length === 1 ? '' : 's'
+                  } (tap to expand)`}
+            </Button>
+            {otherNodeGroupOpen ? (
+              <Box>
                 <Banner
                   severity="warning"
-                  title="Bound to a different Bee node"
+                  title="Different Bee node in Settings"
                 >
                   <Text>
-                    This storage was created against another Bee node and
-                    can't be used from your current one. Either point the
-                    Snap at the original Bee node in Settings, or buy new
-                    storage on this node.
+                    The storages below cannot be used until you set the same Bee
+                    API in Settings, or you buy new storage for this node.
                   </Text>
                 </Banner>
-              ) : null}
-
-              <Divider />
-            </Section>
-          );
-        })}
+                {other.map((v) => oneStorage(v, false))}
+              </Box>
+            ) : null}
+          </Section>
+        ) : null}
       </Box>
       <Footer>
         <Button name={NAV_EVENTS.HOME}>Back</Button>

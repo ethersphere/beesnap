@@ -59,6 +59,9 @@ import {
   loadStamps,
   countResolvedStamps,
   type StampsLoadResult,
+  STAMPS_TOGGLE_OTHER_GROUP,
+  serializeStampsForContext,
+  deserializeStampsFromContext,
 } from './components/StampsList';
 import {
   UploadForm,
@@ -255,6 +258,28 @@ async function handleButton(
   // and abort before calling snap_updateInterface again.
   await setActivePoll(id, null);
 
+  // ── Stamps list: toggle the “other Bee node” group (keeps `stamps` in context) ─
+  if (name === STAMPS_TOGGLE_OTHER_GROUP) {
+    const raw = context?.stamps;
+    if (raw == null) {
+      return;
+    }
+    let data: StampsLoadResult;
+    try {
+      data = deserializeStampsFromContext(raw);
+    } catch {
+      return;
+    }
+    const prev =
+      (context?.otherNodeGroupOpen as boolean | undefined) ?? false;
+    const next = !prev;
+    await update(id, <StampsList {...data} otherNodeGroupOpen={next} />, {
+      stamps: serializeStampsForContext(data),
+      otherNodeGroupOpen: next,
+    });
+    return;
+  }
+
   // ── Top-level navigation ────────────────────────────────────────────────────
   if (name === NAV_EVENTS.HOME) {
     const props = await loadHomeProps();
@@ -265,7 +290,10 @@ async function handleButton(
     const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your stamps" />);
     const data = await loadStamps(account);
-    await update(id, <StampsList {...data} />);
+    await update(id, <StampsList {...data} otherNodeGroupOpen={false} />, {
+      stamps: serializeStampsForContext(data),
+      otherNodeGroupOpen: false,
+    });
 
     // Auto-poll: if any stamp didn't resolve from Bee on the first read, keep
     // re-checking for up to 2 minutes. The Bee node usually picks up a freshly
@@ -668,7 +696,10 @@ async function runStampsPoll(
     const before = countResolvedStamps(prev);
     const after = countResolvedStamps(fresh);
     if (after > before) {
-      await update(id, <StampsList {...fresh} />);
+      await update(id, <StampsList {...fresh} otherNodeGroupOpen={false} />, {
+        stamps: serializeStampsForContext(fresh),
+        otherNodeGroupOpen: false,
+      });
       prev = fresh;
     }
 
