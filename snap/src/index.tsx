@@ -60,6 +60,7 @@ import {
   countResolvedStamps,
   type StampsLoadResult,
   STAMPS_TOGGLE_OTHER_GROUP,
+  NAV_UPLOAD_FOR_STAMP_PREFIX,
   serializeStampsForContext,
   deserializeStampsFromContext,
 } from './components/StampsList';
@@ -220,16 +221,23 @@ export const onUserInput: OnUserInputHandler = async ({ id, event, context }) =>
       if (file) {
         const account = await getBeesnapAddress();
         const data = await loadUsableStamps(account);
+        const uploadInitialBatchIdRaw = context?.uploadInitialBatchId;
+        const uploadInitialBatchId =
+          typeof uploadInitialBatchIdRaw === 'string' && uploadInitialBatchIdRaw.length > 0
+            ? uploadInitialBatchIdRaw
+            : undefined;
         await update(
           id,
           <UploadForm
             {...data}
+            initialBatchId={uploadInitialBatchId}
             selected={{
               name: file.name,
               size: file.size,
               contentType: file.contentType,
             }}
           />,
+          { uploadInitialBatchId: uploadInitialBatchId ?? '' },
         );
       }
       return;
@@ -322,7 +330,20 @@ async function handleButton(
     const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your stamps" />);
     const data = await loadUsableStamps(account);
-    await update(id, <UploadForm {...data} />);
+    await update(id, <UploadForm {...data} />, { uploadInitialBatchId: '' });
+    return;
+  }
+  if (name.startsWith(NAV_UPLOAD_FOR_STAMP_PREFIX)) {
+    const batchId = name.slice(NAV_UPLOAD_FOR_STAMP_PREFIX.length).trim();
+    if (!/^[0-9a-fA-F]+$/.test(batchId)) {
+      throw new Error('Invalid upload navigation.');
+    }
+    const account = await getBeesnapAddress();
+    await update(id, <Loading title="Loading your stamps" />);
+    const data = await loadUsableStamps(account);
+    await update(id, <UploadForm {...data} initialBatchId={batchId} />, {
+      uploadInitialBatchId: batchId,
+    });
     return;
   }
   if (name === NAV_EVENTS.SETTINGS) {
@@ -435,7 +456,19 @@ async function handleButton(
     const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your storage" />);
     const data = await loadUsableStamps(account);
-    await update(id, <UploadForm {...data} />);
+    const uploadInitialBatchIdRaw = context?.uploadInitialBatchId;
+    const uploadInitialBatchId =
+      typeof uploadInitialBatchIdRaw === 'string' && uploadInitialBatchIdRaw.length > 0
+        ? uploadInitialBatchIdRaw
+        : '';
+    await update(
+      id,
+      <UploadForm
+        {...data}
+        initialBatchId={uploadInitialBatchId || undefined}
+      />,
+      { uploadInitialBatchId },
+    );
     return;
   }
   if (name === UPLOAD_EVENTS.SUBMIT) {

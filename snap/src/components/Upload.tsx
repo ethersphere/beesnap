@@ -131,6 +131,12 @@ export interface UploadFormProps {
   stamps: UsableStamp[];
   registryError?: string;
   /**
+   * Batch id without `0x` — when set (e.g. from "My storage"), that stamp is
+   * listed first in the dropdown so it is the effective default where the UI
+   * picks the first option.
+   */
+  initialBatchId?: string;
+  /**
    * If a file has been picked since the form first loaded, this carries its
    * display info so we can render a "Selected:" confirmation. The file
    * itself is held by the framework in form state — we don't pass it here.
@@ -138,8 +144,22 @@ export interface UploadFormProps {
   selected?: { name: string; size: number; contentType: string };
 }
 
+function orderStampsForInitial(stamps: UsableStamp[], initialBatchId: string | undefined) {
+  if (!initialBatchId) return stamps;
+  return [...stamps].sort((a, b) => {
+    if (a.batchId === initialBatchId) return -1;
+    if (b.batchId === initialBatchId) return 1;
+    return 0;
+  });
+}
+
 export function UploadForm(props: UploadFormProps) {
-  const { stamps, registryError, selected } = props;
+  const { stamps, registryError, selected, initialBatchId } = props;
+  const stampsOrdered = orderStampsForInitial(stamps, initialBatchId);
+  const initialMissing =
+    Boolean(initialBatchId) &&
+    stamps.length > 0 &&
+    !stamps.some(s => s.batchId === initialBatchId);
 
   if (registryError) {
     return (
@@ -184,6 +204,16 @@ export function UploadForm(props: UploadFormProps) {
           node stores the data.
         </Text>
 
+        {initialMissing ? (
+          <Banner severity="warning" title="That storage isn't ready here yet">
+            <Text>
+              The batch you opened from My storage isn't in the usable list for this Bee
+              node — often it needs a minute after purchase, or Bee still syncing. Refresh
+              My storage, or pick another batch below.
+            </Text>
+          </Banner>
+        ) : null}
+
         {/*
           Form wraps the inputs purely so the framework keeps their values in
           interface state. The actual "Upload" button lives in the Footer
@@ -194,7 +224,7 @@ export function UploadForm(props: UploadFormProps) {
         <Form name={UPLOAD_EVENTS.FORM}>
           <Field label="Storage batch">
             <Dropdown name={UPLOAD_FIELDS.STAMP}>
-              {stamps.map((s) => (
+              {stampsOrdered.map((s) => (
                 <Option value={s.batchId}>
                   {shortHash(s.batchIdHex, 8, 6)}
                 </Option>

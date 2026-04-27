@@ -38,6 +38,12 @@ import { NAV_EVENTS } from './Home';
 export const STAMPS_TOGGLE_OTHER_GROUP = 'stamps-toggle-other';
 
 /**
+ * Per-storage “Upload” buttons use this prefix plus the batch id **without** the
+ * `0x` prefix (same form Bee uses in headers). Parsed in `index.tsx`.
+ */
+export const NAV_UPLOAD_FOR_STAMP_PREFIX = 'nav-upload-for:';
+
+/**
  * `snap_updateInterface` JSON-serializes `context`. `RegistryBatch` uses
  * bigint for on-chain uints, which `JSON.stringify` cannot handle — use this
  * for `context.stamps` and {@link deserializeStampsFromContext} on read.
@@ -275,7 +281,11 @@ export function StampsList(props: StampsListProps) {
 
   const { working, other } = partitionBatches(batches, stamps);
 
-  const oneStorage = (v: BatchView, showItemWrongNodeBanner: boolean) => {
+  const oneStorage = (
+    v: BatchView,
+    showItemWrongNodeBanner: boolean,
+    showUploadForThisNode: boolean,
+  ) => {
     const { b, origIndex, entry } = v;
     const n = origIndex + 1;
     const info = entry?.info ?? null;
@@ -303,6 +313,12 @@ export function StampsList(props: StampsListProps) {
             <Address address={b.nodeAddress as `0x${string}`} />
           </Row>
         </Section>
+
+        {showUploadForThisNode ? (
+          <Button name={`${NAV_UPLOAD_FOR_STAMP_PREFIX}${b.batchId.slice(2)}`}>
+            Upload with this storage
+          </Button>
+        ) : null}
 
         {entry?.boundToCurrentNode === true && !info ? (
           <Banner severity="info" title="Details still loading on Bee">
@@ -359,7 +375,7 @@ export function StampsList(props: StampsListProps) {
 
           <Box>
             {working.length > 0 ? (
-              working.map(v => oneStorage(v, false))
+              working.map(v => oneStorage(v, false, true))
             ) : (
               <Text>
                 None. Everything in your list is bound to a different Bee node than the one in
@@ -395,7 +411,7 @@ export function StampsList(props: StampsListProps) {
                     you buy new storage for this node.
                   </Text>
                 </Banner>
-                {other.map(v => oneStorage(v, false))}
+                {other.map(v => oneStorage(v, false, false))}
               </Box>
             ) : null}
           </Section>
