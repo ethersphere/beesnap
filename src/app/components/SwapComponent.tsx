@@ -102,12 +102,12 @@ const SwapComponent: React.FC = () => {
   // Log version info on component initialization
   React.useEffect(() => {
     console.log(`
-                               🐝 BEEPORT 🐝    
+                               🐝 BEESNAP 🐝    
     ╔════════════════════════════════════════════════════════════════╗
     ║                         Version: 1.1.9                         ║
     ║                                                                ║
     ║            Multichain Swarm Upload & Stamp Manager             ║
-    ║              https://github.com/ethersphere/beeport            ║
+    ║              https://github.com/0xCardiE/beesnap               ║
     ╚════════════════════════════════════════════════════════════════╝
     `);
   }, []);

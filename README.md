@@ -1,6 +1,6 @@
-# Beeport — MetaMask Snap
+# Beesnap — MetaMask Snap
 
-Beeport is a MetaMask Snap that lets users buy Swarm postage stamps and upload
+Beesnap is a MetaMask Snap that lets users buy Swarm postage stamps and upload
 files to a Bee node — directly from inside MetaMask, with no separate dApp UI
 to bounce through.
 
@@ -19,7 +19,7 @@ This repo (v2.x) replaces the previous Next.js dApp (v1.x). The v1 SwapComponent
 ## Repo layout
 
 ```
-beewallet/
+beesnap/
 ├── snap/                    ← The Snap. New code lives here.
 │   ├── snap.manifest.json
 │   ├── snap.config.ts
@@ -68,26 +68,26 @@ npm run backend:dev  # http://localhost:3333
 ```
 
 Open `http://localhost:3000`, click **Install Snap**, confirm in MetaMask
-Flask, then open MetaMask → Snaps → Beeport.
+Flask, then open MetaMask → Snaps → Beesnap.
 
 > You need [MetaMask Flask](https://docs.metamask.io/snaps/get-started/install-flask/) for development. Stable MetaMask only supports Snaps published to npm.
 
 ## What's implemented (v1.5)
 
-- ✅ **Beeport account** — a key derived deterministically from your secret recovery phrase via `snap_getEntropy` (salted by `beeport-account-v1`). Same recovery phrase always yields the same address, but it never collides with any of your normal MetaMask accounts (MetaMask explicitly forbids Snaps from deriving at the user's BIP44 paths). The Snap signs and broadcasts every transaction with this account.
-- ✅ **View my stamps** — reads on-chain registry on Gnosis (for the Beeport account), decorates with utilization + TTL from the Bee node.
-- ✅ **Buy a new stamp** — pick depth + duration, fetch live Relay quote, sign + broadcast each Relay step locally with the Beeport key. Gnosis-only in v1.5; cross-chain comes later.
-- ✅ **Upload a file** — pick stamp + file, sign auth message with Beeport key, POST to `${beeApiUrl}/bzz`. **No upload progress** (Snap `fetch` doesn't expose it; see honest caveats below).
-- ✅ **View my uploads** — local Snap-state record of what the Beeport account has uploaded through this Snap.
+- ✅ **Beesnap account** — a key derived deterministically from your secret recovery phrase via `snap_getEntropy` (salt string `beeport-account-v1` in code — unchanged so existing addresses stay stable). Same recovery phrase always yields the same address, but it never collides with any of your normal MetaMask accounts (MetaMask explicitly forbids Snaps from deriving at the user's BIP44 paths). The Snap signs and broadcasts every transaction with this account.
+- ✅ **View my stamps** — reads on-chain registry on Gnosis (for the Snap-derived account), decorates with utilization + TTL from the Bee node.
+- ✅ **Buy a new stamp** — pick depth + duration, fetch live Relay quote, sign + broadcast each Relay step locally with that key. Gnosis-only in v1.5; cross-chain comes later.
+- ✅ **Upload a file** — pick stamp + file, sign auth message with the Snap key, POST to `${beeApiUrl}/bzz`. **No upload progress** (Snap `fetch` doesn't expose it; see honest caveats below).
+- ✅ **View my uploads** — local Snap-state record of what the Snap-derived account has uploaded through this Snap.
 
-## Why the Beeport account exists
+## Why the Snap-derived account exists
 
 Snaps **cannot** call `eth_sendTransaction` on the user's main MetaMask account — it's not in the allowlist for `endowment:ethereum-provider`. So we either:
 
 1. Bounce the user out to a companion dApp page that *can* call `eth_sendTransaction` from a normal `window.ethereum` context (rejected — user wanted everything inside MetaMask).
 2. Have the Snap manage its own key, derived from the user's secret recovery phrase, and sign + send transactions itself. **This is what we do.**
 
-The trade-off: stamps bought through this Snap are owned by the Beeport address, not your main MetaMask address. You need to fund the Beeport address (xDAI for gas + paying for stamps) before buying. The home page shows the address with a Copyable so you can send funds to it from any wallet.
+The trade-off: stamps bought through this Snap are owned by the Snap-derived address, not your main MetaMask address. You need to fund that address (xDAI for gas + paying for stamps) before buying. The home page shows the address with a Copyable so you can send funds to it from any wallet.
 
 Stamps bought before v1.5 (registered to your main MetaMask address in the v1 dApp) **will not appear in the Snap** — they're owned by a different address. You can still see and use them via the v1 dApp if you keep it deployed somewhere.
 
@@ -114,14 +114,14 @@ These are real platform limits — not bugs:
 ```jsonc
 "endowment:rpc": { "dapps": true, "snaps": false },
 "endowment:network-access": {},        // fetch to api.relay.link, beeport.xyz, gnosis RPCs
-"endowment:page-home": {},             // the Beeport tab in MetaMask
+"endowment:page-home": {},             // the Beesnap tab in MetaMask
 "snap_dialog": {},                     // welcome dialog on install
 "snap_manageState": {},                // upload history, settings
 "snap_notify": {},                     // (reserved for future use)
-"snap_getEntropy": {}                  // derives the Beeport account (32 bytes, salted by Snap id)
+"snap_getEntropy": {}                  // derives the Snap account (32 bytes, salted by Snap id)
 ```
 
-The Snap intentionally does **not** request `endowment:ethereum-provider`. The user's main MetaMask account is never accessed by this Snap — all signing and transaction broadcasting goes through the Beeport account.
+The Snap intentionally does **not** request `endowment:ethereum-provider`. The user's main MetaMask account is never accessed by this Snap — all signing and transaction broadcasting goes through the Snap-derived account.
 
 ## Backend & contracts (unchanged)
 

@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * Beeport Snap install page.
+ * Beesnap Snap install page.
  *
- * One job: detect MetaMask, request the Beeport Snap (`wallet_requestSnaps`),
- * and tell the user to open the Beeport tab in MetaMask. There is no
+ * One job: detect MetaMask, request the Beesnap Snap (`wallet_requestSnaps`),
+ * and tell the user to open the Beesnap tab in MetaMask. There is no
  * connect-button or upload UI here — that all moved into the Snap.
  *
  * The snap id default `local:http://localhost:8080` matches the Snap's dev
  * server (`mm-snap serve`) so this page works end-to-end during development.
- * For production you set `NEXT_PUBLIC_SNAP_ID=npm:@beeport/snap` in the env.
+ * For production you set `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap` in the env.
  */
 import { useEffect, useState } from 'react';
 
@@ -80,9 +80,10 @@ export default function InstallPage() {
 
   return (
     <div className="install-card">
-      <h1>Beeport Snap</h1>
+      <h1>Beesnap</h1>
       <p className="lead">
-        Buy Swarm postage stamps and upload files — directly from MetaMask.
+        Swarm bee snap integration with MetaMask — buy postage stamps and upload
+        files from your wallet.
       </p>
 
       <Status status={status} errorMsg={errorMsg} />
@@ -99,10 +100,10 @@ export default function InstallPage() {
       )}
       {status === 'installed' && (
         <div className="installed-block">
-          <p>The Beeport Snap is installed.</p>
+          <p>The Beesnap Snap is installed.</p>
           <p>
             Open MetaMask, click the menu (top left), pick <b>Snaps</b>, then
-            select <b>Beeport</b>. From there you can buy stamps, upload files,
+            select <b>Beesnap</b>. From there you can buy stamps, upload files,
             and view what you've uploaded.
           </p>
         </div>
@@ -161,13 +162,13 @@ function Status({
     case 'ready':
       return (
         <p className="status">
-          MetaMask detected. Click <b>Install Snap</b> to add Beeport.
+          MetaMask detected. Click <b>Install Snap</b> to add Beesnap.
         </p>
       );
     case 'installing':
       return <p className="status">Confirm the install in MetaMask…</p>;
     case 'installed':
-      return <p className="status ok">Beeport Snap is installed.</p>;
+      return <p className="status ok">Beesnap Snap is installed.</p>;
     case 'error':
       return (
         <p className="status error">

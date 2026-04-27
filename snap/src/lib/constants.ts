@@ -1,5 +1,5 @@
 /**
- * Constants for the Beeport Snap.
+ * Constants for the Beesnap Snap.
  *
  * Values are copied from the original Next.js app's `src/app/components/constants.ts`
  * so the Snap stays compatible with the same backend, registry, and stamps router
@@ -21,7 +21,7 @@
  *           - "null"
  *           - "*"
  *
- *  2. A Beeport proxy (e.g. https://beeport.xyz) — a public endpoint that
+ *  2. A public Bee API proxy (e.g. https://beeport.xyz) — an endpoint that
  *     wraps a Bee node behind nginx and a signature-verification middleware
  *     (see backend/index.js). The proxy requires our custom auth headers
  *     (x-upload-signed-message etc.) and the corresponding CORS allowlist.

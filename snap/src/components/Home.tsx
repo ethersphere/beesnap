@@ -1,11 +1,10 @@
 /**
  * Root home screen.
  *
- * Shows the Beeport account address (the one the Snap derives from your seed
- * phrase) plus its xDAI balance, so the user always knows whether they need
- * to fund the account before buying stamps. Then four primary navigation
- * buttons that hand off to the buy / upload / stamps-list / uploads-list
- * screens via `onUserInput`.
+ * Shows the Snap-derived account address (from your seed phrase) plus its
+ * xDAI balance, so the user always knows whether they need to fund the account
+ * before buying stamps. Then four primary navigation buttons that hand off to
+ * the buy / upload / stamps-list / uploads-list screens via `onUserInput`.
  */
 
 import {
@@ -33,28 +32,28 @@ export const NAV_EVENTS = {
 } as const;
 
 export interface HomeProps {
-  /** The Snap-derived "Beeport" account. Always present once Snap is installed. */
-  beeportAddress: `0x${string}`;
-  /** xDAI balance of the Beeport account in wei. null = couldn't fetch. */
-  beeportBalanceWei: bigint | null;
+  /** The Snap-derived Beesnap account. Always present once Snap is installed. */
+  beesnapAddress: `0x${string}`;
+  /** xDAI balance of that account in wei. null = couldn't fetch. */
+  beesnapBalanceWei: bigint | null;
 }
 
 /** Threshold below which we warn the user to top up. ~$0.05 worth of xDAI. */
 const LOW_BALANCE_THRESHOLD_WEI = 50_000_000_000_000_000n; // 0.05 xDAI
 
-export function Home({ beeportAddress, beeportBalanceWei }: HomeProps) {
+export function Home({ beesnapAddress, beesnapBalanceWei }: HomeProps) {
   const balanceLabel =
-    beeportBalanceWei === null
+    beesnapBalanceWei === null
       ? 'unavailable'
-      : `${formatXdai(beeportBalanceWei)} xDAI`;
+      : `${formatXdai(beesnapBalanceWei)} xDAI`;
   const lowBalance =
-    beeportBalanceWei !== null &&
-    beeportBalanceWei < LOW_BALANCE_THRESHOLD_WEI;
+    beesnapBalanceWei !== null &&
+    beesnapBalanceWei < LOW_BALANCE_THRESHOLD_WEI;
 
   return (
     <Container>
       <Box>
-        <Heading>Beeport</Heading>
+        <Heading>Beesnap</Heading>
         <Text>
           Buy storage on Swarm and upload files to your Bee node — without
           leaving MetaMask.
@@ -63,17 +62,17 @@ export function Home({ beeportAddress, beeportBalanceWei }: HomeProps) {
         <Divider />
 
         <Section>
-          <Heading size="sm">Your Beeport account</Heading>
+          <Heading size="sm">Your Beesnap account</Heading>
           <Text>
             This address is derived from your secret recovery phrase and is
             unique to this Snap. Send xDAI here to fund stamp purchases and
             uploads.
           </Text>
           <Row label="Address">
-            <Address address={beeportAddress} />
+            <Address address={beesnapAddress} />
           </Row>
           <Row label="Copy">
-            <Copyable value={beeportAddress} />
+            <Copyable value={beesnapAddress} />
           </Row>
           <Row label="Balance">
             <Text>{balanceLabel}</Text>
@@ -83,7 +82,7 @@ export function Home({ beeportAddress, beeportBalanceWei }: HomeProps) {
         {lowBalance ? (
           <Banner severity="warning" title="Low balance">
             <Text>
-              Your Beeport account has less than 0.05 xDAI. Send some xDAI on
+              Your Beesnap account has less than 0.05 xDAI. Send some xDAI on
               Gnosis to the address above before trying to buy a stamp.
             </Text>
           </Banner>

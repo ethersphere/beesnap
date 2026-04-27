@@ -1,16 +1,16 @@
 /**
- * Gnosis chain access for the Beeport Snap.
+ * Gnosis chain access for the Beesnap Snap.
  *
  * v1.0 used the user's MetaMask account through `endowment:ethereum-provider`
  * for `eth_sendTransaction` and `personal_sign`. That approach doesn't work:
  * Snaps cannot call `eth_sendTransaction`. So in v1.5 we sign *and* send
- * everything ourselves using the Beeport account derived in `wallet.ts`,
+ * everything ourselves using the Snap-derived account from `wallet.ts`,
  * broadcasting raw txs over public Gnosis RPCs via `fetch`.
  *
  * Three things this module does:
  *   1. Read-only `eth_call` against Gnosis (public RPC roundtrip).
- *   2. Sign + broadcast a transaction with the Beeport account.
- *   3. Sign an EIP-191 message with the Beeport account (used for upload auth).
+ *   2. Sign + broadcast a transaction with the Snap-derived account.
+ *   3. Sign an EIP-191 message with that account (used for upload auth).
  *   4. Wait for a Gnosis tx receipt.
  *
  * Errors are surfaced verbatim (per project rule: no mock data, no fake
@@ -19,7 +19,7 @@
  */
 
 import { GNOSIS_CHAIN_ID, GNOSIS_RPCS } from './constants';
-import { getBeeportAccount } from './wallet';
+import { getBeesnapAccount } from './wallet';
 
 // ── eth_call (read-only) ─────────────────────────────────────────────────────
 
@@ -205,7 +205,7 @@ async function estimateGas(args: {
     // troubleshooting starting point in the UI rather than just "reverted".
     const original = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `eth_estimateGas reverted for ${args.to}. Common causes: not enough xDAI/BZZ in your Beeport account, the same stamp was already created on a previous attempt (try refreshing "View my stamps"), or the call would fail on-chain. Original: ${original}`,
+      `eth_estimateGas reverted for ${args.to}. Common causes: not enough xDAI/BZZ in your Beesnap account, the same stamp was already created on a previous attempt (try refreshing "View my stamps"), or the call would fail on-chain. Original: ${original}`,
     );
   }
 }
@@ -228,14 +228,14 @@ export interface SendTxInput {
 }
 
 /**
- * Sign a transaction locally with the Beeport account and broadcast it via
+ * Sign a transaction locally with the Snap-derived account and broadcast it via
  * `eth_sendRawTransaction` against a public Gnosis RPC.
  *
  * Returns the resulting transaction hash. The caller usually wants to follow
  * up with `waitForGnosisReceipt`.
  */
 export async function sendTx(input: SendTxInput): Promise<string> {
-  const account = await getBeeportAccount();
+  const account = await getBeesnapAccount();
 
   const [nonce, gasPrice] = await Promise.all([
     getNonce(account.address),
@@ -285,10 +285,10 @@ export async function sendTx(input: SendTxInput): Promise<string> {
 // ── Sign personal_sign-style messages ────────────────────────────────────────
 
 /**
- * EIP-191 personal_sign with the Beeport account. Used for upload auth
+ * EIP-191 personal_sign with the Snap-derived account. Used for upload auth
  * signatures the backend's verifySignature middleware checks.
  */
 export async function signMessage(message: string): Promise<string> {
-  const account = await getBeeportAccount();
+  const account = await getBeesnapAccount();
   return account.signMessage({ message });
 }

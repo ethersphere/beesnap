@@ -1,7 +1,12 @@
 {
-  "name": "@beeport/snap",
+  "name": "@beesnap/snap",
   "version": "0.1.0",
-  "description": "Beeport Snap — buy Swarm postage stamps and upload files from inside MetaMask.",
+  "description": "Beesnap — Swarm bee snap integration with MetaMask Snaps.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xCardiE/beesnap.git",
+    "directory": "snap"
+  },
   "main": "dist/bundle.js",
   "files": [
     "dist/",

@@ -1,7 +1,7 @@
 ## CI scripts
 
 ```
-chmod +x /var/www/beeport/ci/deploy.sh
+chmod +x /var/www/beesnap/ci/deploy.sh
 ```
 
 so it can be run by webhook

@@ -1,5 +1,5 @@
 /**
- * Talks to the Beeport backend (which proxies Bee). All calls hit
+ * Talks to the Beesnap / Bee proxy backend. All calls hit
  * `${beeApiUrl}` from snap state, default `https://beeport.xyz`.
  *
  * Two responsibilities:
@@ -277,7 +277,7 @@ export async function uploadFile(
     'swarm-collection': 'false',
   };
 
-  // Proxy-only auth headers. The Beeport backend's verifySignature middleware
+  // Proxy-only auth headers. The backend's verifySignature middleware
   // expects these; a raw Bee node ignores them and they trigger an extra CORS
   // preflight burden if Bee's CORS allowlist isn't tuned. So when going
   // straight to a local Bee, leave them off entirely. Same heuristic as the

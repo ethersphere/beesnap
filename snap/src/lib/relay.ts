@@ -296,7 +296,7 @@ export interface ExecuteContext {
 
 /**
  * Walk every step in a Relay quote, signing + broadcasting each tx with the
- * Beeport account (via `sendTx`) and polling Relay's status endpoint between
+ * Snap-derived account (via `sendTx`) and polling Relay's status endpoint between
  * steps where applicable.
  *
  * v1.5 only supports Gnosis-on-Gnosis purchases. The pre-flight chain check

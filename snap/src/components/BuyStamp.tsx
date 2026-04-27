@@ -108,7 +108,7 @@ export function BuyStampForm() {
 
         <Banner severity="warning" title="v1.5: Gnosis-only, native xDAI">
           <Text>
-            Buys are funded by your Beeport account (visible on the home
+            Buys are funded by your Beesnap account (visible on the home
             page). Make sure it has enough xDAI on Gnosis before you press
             Get quote.
           </Text>
@@ -170,14 +170,14 @@ export async function buildPendingPurchase(opts: {
 
     // v1.5 constraint: Gnosis-only buys.
     //
-    // The Snap signs + broadcasts every tx itself with the Beeport account,
+    // The Snap signs + broadcasts every tx itself with the Snap-derived account,
     // so there's no MetaMask "current chain" to consider. But Relay's
     // cross-chain flow requires the source-chain leg to be funded on the
-    // user's address there too — and we'd need to expose the Beeport account
+    // user's address there too — and we'd need to expose the Snap-derived account
     // on every chain it might receive funds on. Out of scope for v1.5.
     if (opts.chainId !== 100) {
       return {
-        error: `Cross-chain buys aren't supported yet. Pick "Gnosis (xDAI)" as the source — your Beeport account just needs xDAI on Gnosis.`,
+        error: `Cross-chain buys aren't supported yet. Pick "Gnosis (xDAI)" as the source — your Beesnap account just needs xDAI on Gnosis.`,
       };
     }
 

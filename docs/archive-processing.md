@@ -2,7 +2,7 @@
 
 ## Overview
 
-Beeport provides advanced archive processing capabilities that automatically convert uploaded folders, ZIP files, and TAR files into browsable websites with professional index pages. This system intelligently handles file organization, metadata cleanup, and website configuration.
+Beesnap provides advanced archive processing capabilities that automatically convert uploaded folders, ZIP files, and TAR files into browsable websites with professional index pages. This system intelligently handles file organization, metadata cleanup, and website configuration.
 
 ## Supported Upload Types
 
@@ -429,4 +429,4 @@ Benefits:
 
 ---
 
-_This comprehensive guide covers all aspects of archive processing in Beeport. For specific upload types, see: [Folder Upload](./folder-upload.md), [ZIP File Upload](./zip-file-upload.md), and [Webpage Upload](./webpage-upload.md)._
+_This comprehensive guide covers all aspects of archive processing in Beesnap. For specific upload types, see: [Folder Upload](./folder-upload.md), [ZIP File Upload](./zip-file-upload.md), and [Webpage Upload](./webpage-upload.md)._

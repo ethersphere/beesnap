@@ -126,7 +126,7 @@ if (recordIndex !== -1) {
 ```javascript
 // Clear the migration cache to force re-run
 const address = '0x1234567890abcdef1234567890abcdef12345678'; // Replace with actual address
-localStorage.removeItem(`beeport_expiry_migrated_${address}`);
+localStorage.removeItem(`beesnap_expiry_migrated_${address}`);
 console.log('Migration cache cleared - will run again on next load');
 ```
 
@@ -135,7 +135,7 @@ console.log('Migration cache cleared - will run again on next load');
 ```javascript
 // Check if migration was run recently
 const address = '0x1234567890abcdef1234567890abcdef12345678'; // Replace with actual address
-const migrationKey = `beeport_expiry_migrated_${address}`;
+const migrationKey = `beesnap_expiry_migrated_${address}`;
 const lastMigration = localStorage.getItem(migrationKey);
 if (lastMigration) {
   const timeSince = Date.now() - parseInt(lastMigration);
@@ -155,7 +155,7 @@ const address = '0x1234567890abcdef1234567890abcdef12345678'; // Replace with yo
 
 // Clear existing data
 localStorage.removeItem('uploadHistory');
-localStorage.removeItem(`beeport_expiry_migrated_${address}`);
+localStorage.removeItem(`beesnap_expiry_migrated_${address}`);
 
 // Create test data with various invalid formats
 const testData = {

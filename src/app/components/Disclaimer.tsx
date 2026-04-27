@@ -5,7 +5,7 @@ const Disclaimer: React.FC = () => {
     <div className={styles.disclaimerContainer}>
       <p>
         <strong>
-          Beeport is the web2 rails for{' '}
+          Beesnap is the web2 rails for{' '}
           <a href="https://ethswarm.org/" target="_blank">
             Swarm
           </a>

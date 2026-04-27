@@ -1,5 +1,5 @@
 /**
- * Beeport Snap entry point.
+ * Beesnap Snap entry point.
  *
  * Exports the four standard handlers MetaMask calls into:
  *   - onInstall      — one-time welcome dialog
@@ -12,7 +12,7 @@
  * any state that needs to survive between renders (e.g. an in-flight Relay
  * quote during the buy flow).
  *
- * The "account" everywhere in this Snap means the *Beeport account* — a key
+ * The "account" everywhere in this Snap means the *Snap-derived Beesnap account* — a key
  * derived from the user's secret recovery phrase (see `lib/wallet.ts`). It is
  * not the user's main MetaMask account. Snaps cannot send transactions on
  * the user's MetaMask account, so we sign + broadcast from this derived key
@@ -28,7 +28,7 @@ import {
 } from '@metamask/snaps-sdk';
 import { Box, Heading, Text } from '@metamask/snaps-sdk/jsx';
 
-import { getBeeportAddress } from './lib/wallet';
+import { getBeesnapAddress } from './lib/wallet';
 import { getGnosisBalance } from './lib/ethereum';
 import { fetchNodeWalletAddress } from './lib/bee';
 import { DEFAULT_BEE_API_URL } from './lib/constants';
@@ -92,10 +92,10 @@ import {
 // ── onInstall ────────────────────────────────────────────────────────────────
 
 export const onInstall: OnInstallHandler = async () => {
-  // Pre-derive the Beeport account so we can show the user where to send funds.
+  // Pre-derive the Snap account so we can show the user where to send funds.
   let address: string;
   try {
-    address = await getBeeportAddress();
+    address = await getBeesnapAddress();
   } catch (err) {
     address = '(failed to derive — see Snap logs)';
   }
@@ -106,14 +106,14 @@ export const onInstall: OnInstallHandler = async () => {
       type: 'alert',
       content: (
         <Box>
-          <Heading>Welcome to Beeport</Heading>
+          <Heading>Welcome to Beesnap</Heading>
           <Text>
-            Beeport derives a dedicated account from your secret recovery
+            Beesnap derives a dedicated account from your secret recovery
             phrase. Send xDAI on Gnosis to it before buying stamps:
           </Text>
           <Text>{address}</Text>
           <Text>
-            Open the Beeport tab on the left of MetaMask any time to view this
+            Open the Beesnap tab on the left of MetaMask any time to view this
             address again, see your balance, buy stamps, and upload files.
           </Text>
         </Box>
@@ -122,20 +122,20 @@ export const onInstall: OnInstallHandler = async () => {
   });
 };
 
-// ── Helper: load Home props (Beeport address + balance) ─────────────────────
+// ── Helper: load Home props (Snap-derived address + balance) ────────────────
 
 async function loadHomeProps() {
-  const beeportAddress = (await getBeeportAddress()) as `0x${string}`;
-  // Remember the Beeport address so it shows up consistently across screens.
-  await rememberAccount(beeportAddress);
-  let beeportBalanceWei: bigint | null = null;
+  const beesnapAddress = (await getBeesnapAddress()) as `0x${string}`;
+  // Remember the address so it shows up consistently across screens.
+  await rememberAccount(beesnapAddress);
+  let beesnapBalanceWei: bigint | null = null;
   try {
-    beeportBalanceWei = await getGnosisBalance(beeportAddress);
+    beesnapBalanceWei = await getGnosisBalance(beesnapAddress);
   } catch {
     // Don't block the home screen on a balance fetch failure — surface as null.
-    beeportBalanceWei = null;
+    beesnapBalanceWei = null;
   }
-  return { beeportAddress, beeportBalanceWei };
+  return { beesnapAddress, beesnapBalanceWei };
 }
 
 // ── onHomePage ───────────────────────────────────────────────────────────────
@@ -149,18 +149,18 @@ export const onHomePage: OnHomePageHandler = async () => {
 
 /**
  * The install dapp calls `wallet_invokeSnap` with one of these methods:
- *  - hello: smoke-test, returns the Beeport address.
- *  - getAccount: returns the Beeport address.
- *  - openHome: hint the dapp can use to tell the user "open MetaMask → Beeport".
+ *  - hello: smoke-test, returns the Snap-derived address.
+ *  - getAccount: returns the Snap-derived address.
+ *  - openHome: hint the dapp can use to tell the user "open MetaMask → Beesnap".
  */
 export const onRpcRequest: OnRpcRequestHandler = async ({ origin, request }) => {
   switch (request.method) {
     case 'hello':
     case 'getAccount': {
-      const address = await getBeeportAddress();
+      const address = await getBeesnapAddress();
       const result: Record<string, string | boolean> = {
         ok: true,
-        beeportAddress: address,
+        beesnapAddress: address,
         origin,
       };
       return result;
@@ -168,7 +168,7 @@ export const onRpcRequest: OnRpcRequestHandler = async ({ origin, request }) => 
     case 'openHome': {
       const result: Record<string, string | boolean> = {
         ok: true,
-        instruction: 'Open the Beeport tab in MetaMask.',
+        instruction: 'Open the Beesnap tab in MetaMask.',
       };
       return result;
     }
@@ -207,7 +207,7 @@ export const onUserInput: OnUserInputHandler = async ({ id, event, context }) =>
         | { name: string; size: number; contentType: string; contents: string }
         | null;
       if (file) {
-        const account = await getBeeportAddress();
+        const account = await getBeesnapAddress();
         const data = await loadUsableStamps(account);
         await update(
           id,
@@ -258,7 +258,7 @@ async function handleButton(
     return;
   }
   if (name === NAV_EVENTS.STAMPS) {
-    const account = await getBeeportAddress();
+    const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your stamps" />);
     const data = await loadStamps(account);
     await update(id, <StampsList {...data} />);
@@ -273,7 +273,7 @@ async function handleButton(
     return;
   }
   if (name === NAV_EVENTS.UPLOADS) {
-    const account = await getBeeportAddress();
+    const account = await getBeesnapAddress();
     const uploads = await getUploads(account);
     await update(id, <UploadsList uploads={uploads} />);
     return;
@@ -283,7 +283,7 @@ async function handleButton(
     return;
   }
   if (name === NAV_EVENTS.UPLOAD) {
-    const account = await getBeeportAddress();
+    const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your stamps" />);
     const data = await loadUsableStamps(account);
     await update(id, <UploadForm {...data} />);
@@ -395,7 +395,7 @@ async function handleButton(
 
   // ── Upload flow ─────────────────────────────────────────────────────────────
   if (name === UPLOAD_EVENTS.RETRY) {
-    const account = await getBeeportAddress();
+    const account = await getBeesnapAddress();
     await update(id, <Loading title="Loading your storage" />);
     const data = await loadUsableStamps(account);
     await update(id, <UploadForm {...data} />);
@@ -579,7 +579,7 @@ async function runBuyQuote(
   id: string,
   formValues: Record<string, any>,
 ): Promise<void> {
-  const account = await getBeeportAddress();
+  const account = await getBeesnapAddress();
   const chainId = Number(formValues[BUY_FIELDS.CHAIN]);
   const depth = Number(formValues[BUY_FIELDS.DEPTH]);
   const days = Number(formValues[BUY_FIELDS.DAYS]);

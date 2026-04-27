@@ -38,11 +38,12 @@ import {
 } from '../lib/constants';
 import {
   fetchStampInfo,
+  fetchNodeWalletAddress,
   uploadFile,
   type StampFetchDebug,
 } from '../lib/bee';
 import { signMessage } from '../lib/ethereum';
-import { getBeeportAddress } from '../lib/wallet';
+import { getBeesnapAddress } from '../lib/wallet';
 import { addUpload, getState } from '../lib/state';
 import { describeError, shortHash } from '../lib/utils';
 import { getOwnerBatches } from '../lib/registry';
@@ -368,10 +369,10 @@ export function UploadDone(props: UploadDoneProps) {
 
 /**
  * Decode the base64 file payload that FileInput hands us, sign the auth
- * message with the Beeport account, and POST to /bzz. Returns a result the
+ * message with the Snap-derived account, and POST to /bzz. Returns a result the
  * entry-point router can feed straight into <UploadDone />.
  *
- * The uploader is implicit (the Beeport account); callers don't pass it.
+ * The uploader is implicit (the Snap-derived account); callers don't pass it.
  */
 export async function runUpload(opts: {
   batchId: string;
@@ -383,7 +384,7 @@ export async function runUpload(opts: {
   try {
     const state = await getState();
     const beeApiUrl = state.settings.beeApiUrl ?? DEFAULT_BEE_API_URL;
-    const uploaderAddress = await getBeeportAddress();
+    const uploaderAddress = await getBeesnapAddress();
 
     const messageToSign = `${opts.filename}:${opts.batchId}`;
     const signature = await signMessage(messageToSign);

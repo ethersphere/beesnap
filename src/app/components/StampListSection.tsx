@@ -22,7 +22,7 @@ import {
 } from './utils';
 
 // Cache for expired stamps to avoid repeated API calls
-const EXPIRED_STAMPS_CACHE_KEY = 'beeport_expired_stamps';
+const EXPIRED_STAMPS_CACHE_KEY = 'beesnap_expired_stamps';
 
 // Minimum age before considering a stamp for permanent expiry caching (24 hours)
 const MIN_STAMP_AGE_FOR_EXPIRY_CACHE = 24 * 60 * 60 * 1000;

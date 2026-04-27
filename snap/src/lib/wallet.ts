@@ -1,5 +1,5 @@
 /**
- * The "Beeport account" — a private key derived deterministically from the
+ * The "Beesnap" Snap-derived account — a private key derived deterministically from the
  * user's secret recovery phrase via `snap_getEntropy`.
  *
  * Why `snap_getEntropy` and not `snap_getBip32Entropy`?
@@ -16,12 +16,10 @@
  *
  * Tradeoff vs BIP44: this private key is not portable to a normal wallet —
  * you can't import it into MetaMask as a regular account. That's fine; the
- * Beeport account exists only inside this Snap.
+ * Snap-derived account exists only inside this Snap.
  *
- * The salt below is intentional: bumping it (e.g. to `beeport-account-v2`)
- * would derive a NEW Beeport address. Don't change it without a migration
- * plan, because any stamps and uploads under the old address would become
- * invisible.
+ * The salt string below is a legacy identifier and must not change — it pins
+ * the derived Ethereum address. Renaming the product does not change this value.
  */
 
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
@@ -31,14 +29,14 @@ const ENTROPY_SALT = 'beeport-account-v1';
 let cachedAccount: PrivateKeyAccount | null = null;
 
 /**
- * Returns the Beeport account, deriving it on first call.
+ * Returns the Snap-derived account, deriving it on first call.
  *
  * The returned `PrivateKeyAccount` from viem can:
  *  - sign messages (for upload auth)
  *  - sign transactions (for buying stamps)
  *  - expose `.address` for display + on-chain lookups
  */
-export async function getBeeportAccount(): Promise<PrivateKeyAccount> {
+export async function getBeesnapAccount(): Promise<PrivateKeyAccount> {
   if (cachedAccount) return cachedAccount;
 
   const entropyHex = (await snap.request({
@@ -59,7 +57,7 @@ export async function getBeeportAccount(): Promise<PrivateKeyAccount> {
 }
 
 /** Convenience: just the address as a checksum-cased 0x string. */
-export async function getBeeportAddress(): Promise<`0x${string}`> {
-  const acct = await getBeeportAccount();
+export async function getBeesnapAddress(): Promise<`0x${string}`> {
+  const acct = await getBeesnapAccount();
   return acct.address;
 }

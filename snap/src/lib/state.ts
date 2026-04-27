@@ -36,7 +36,7 @@ export interface UploadRecord {
 }
 
 export interface SnapSettings {
-  /** Override for the Beeport backend URL. Defaults to DEFAULT_BEE_API_URL. */
+  /** Override for the Bee API proxy URL. Defaults to DEFAULT_BEE_API_URL. */
   beeApiUrl?: string;
   /** Override for the Swarm node address. Defaults to DEFAULT_NODE_ADDRESS. */
   nodeAddress?: string;

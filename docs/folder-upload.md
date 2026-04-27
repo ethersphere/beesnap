@@ -510,7 +510,7 @@ Result: Organized, browsable backup on decentralized storage
 1. **Organize files** into logical folder structure
 2. **Clean up metadata** (system will auto-filter most)
 3. **Add documentation** (README files)
-4. **Upload folder** using Beeport
+4. **Upload folder** using Beesnap
 5. **Share Swarm URL** instead of traditional links
 
 ### From ZIP/Archive Sharing

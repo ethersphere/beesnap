@@ -1,14 +1,19 @@
 {
   "version": "0.1.0",
-  "description": "Buy Swarm postage stamps and upload files to Swarm via your Bee node — directly from MetaMask.",
-  "proposedName": "Beeport",
+  "description": "Swarm bee snap integration with MetaMask Snaps.",
+  "proposedName": "Beesnap",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xCardiE/beesnap.git",
+    "directory": "snap"
+  },
   "source": {
-    "shasum": "izMzKM4Ihh5FV9YxFFBtqUuwOTA9m3Zf8cnBsz930So=",
+    "shasum": "IW9USKQWkofM2YvjURSncWMd16lPoNjLU3EORrpFETs=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
         "iconPath": "images/logo.svg",
-        "packageName": "@beeport/snap",
+        "packageName": "@beesnap/snap",
         "registry": "https://registry.npmjs.org/"
       }
     }

@@ -1,5 +1,5 @@
 /*
- * Minimal Next.js layout for the Beeport Snap install page.
+ * Minimal Next.js layout for the Beesnap Snap install page.
  *
  * Everything related to wallet connections, swap UI, and uploads has moved
  * into the Snap (`/snap`). What's left here is a single page whose only job
@@ -13,9 +13,9 @@ import type { Metadata } from 'next';
 import './install.css';
 
 export const metadata: Metadata = {
-  title: 'Beeport Snap — Install',
+  title: 'Beesnap — Install',
   description:
-    'Install the Beeport MetaMask Snap to buy Swarm postage stamps and upload files directly from your wallet.',
+    'Swarm bee snap integration with MetaMask Snaps. Install Beesnap to buy Swarm postage stamps and upload files from your wallet.',
   icons: {
     icon: './favicon.png',
     shortcut: './favicon.png',
@@ -30,10 +30,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta property="og:title" content="Beeport Snap" />
+        <meta property="og:title" content="Beesnap" />
         <meta
           property="og:description"
-          content="Install the Beeport MetaMask Snap — Swarm postage stamps and uploads from inside your wallet."
+          content="Swarm bee snap integration with MetaMask Snaps — postage stamps and uploads from inside your wallet."
         />
       </head>
       <body>

@@ -219,7 +219,7 @@ const HelpSection: React.FC<HelpSectionProps> = ({
               This app can also be run with remote node, hosted on a server and its endpoints
               exposed, you can use{' '}
               <a
-                href="https://github.com/ethersphere/beeport/blob/main/backend/index.js"
+                href="https://github.com/0xCardiE/beesnap/blob/main/backend/index.js"
                 target="_blank"
                 rel="noopener noreferrer"
                 className={styles.link}
@@ -263,7 +263,7 @@ const HelpSection: React.FC<HelpSectionProps> = ({
             <h3>Stamp persistence</h3>
             <p>
               Your storage stamps are linked to your wallet address, not to your browser. This means
-              when you connect the same wallet to Beeport on a different browser or machine, all
+              when you connect the same wallet to Beesnap on a different browser or machine, all
               your previously purchased stamps will automatically be loaded and available for use.
               You can seamlessly continue uploading files using your existing stamps from any device
               where you connect your wallet.
