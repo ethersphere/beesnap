@@ -16,7 +16,8 @@
  *    few hundred MB at most before performance degrades sharply.
  */
 
-import { SWARM_DEFERRED_UPLOAD } from './constants';
+import { DEFAULT_BEE_API_URL, SWARM_DEFERRED_UPLOAD } from './constants';
+import { getState, setState } from './state';
 
 export interface StampInfo {
   batchID: string;
@@ -359,4 +360,30 @@ export async function uploadFile(
   }
 
   return { ok: true, reference: parsed.reference, debug };
+}
+
+/** Old compiled-in default — never use as a real node; clear if still persisted. */
+const LEGACY_PRESET_NODE_ADDRESS = '0x5cb4839B7d7b0ab6BaAbFEdD6749497ECa65b2Ca';
+
+/**
+ * GET `${effectiveBeeBase}/wallet` and store `settings.nodeAddress`. Call on
+ * home load and whenever the Bee base URL is saved. Removes the historical
+ * hardcoded preset on upgrade.
+ */
+export async function syncStoredNodeAddressWithWallet(): Promise<void> {
+  const state = await getState();
+  const na = state.settings.nodeAddress;
+  if (
+    na &&
+    na.toLowerCase() === LEGACY_PRESET_NODE_ADDRESS.toLowerCase()
+  ) {
+    delete state.settings.nodeAddress;
+  }
+
+  const base = state.settings.beeApiUrl?.trim() || DEFAULT_BEE_API_URL;
+  const probe = await fetchNodeWalletAddress(base);
+  if (probe.address) {
+    state.settings.nodeAddress = probe.address;
+  }
+  await setState(state);
 }

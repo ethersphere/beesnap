@@ -32,7 +32,6 @@ import {
   TIME_OPTIONS,
   SOURCE_CHAINS,
   RELAY_NATIVE_TOKEN,
-  DEFAULT_NODE_ADDRESS,
   SWARM_BUCKET_DEPTH,
   SWARM_BATCH_IMMUTABLE,
 } from '../lib/constants';
@@ -40,6 +39,7 @@ import { generateNonce, describeError, shortHash, readBatchId } from '../lib/uti
 import { computeStampBzzAmount } from '../lib/pricing';
 import { executeRelaySteps, getStampQuote, RelayQuoteResponse } from '../lib/relay';
 import { getState } from '../lib/state';
+import { syncStoredNodeAddressWithWallet } from '../lib/bee';
 import { NAV_EVENTS } from './Home';
 
 // ── Event names ──────────────────────────────────────────────────────────────
@@ -66,8 +66,9 @@ export function BuyStampForm() {
       <Box>
         <Heading>Buy new storage</Heading>
         <Text>
-          Choose how much storage you need and how long it should last. We'll
-          fetch a live cross-chain quote from Relay before you commit.
+          Choose how much storage you need, how long it should last, and which
+          chain to pay the gas on. We fetch a live quote from Relay before you
+          commit.
         </Text>
 
         {/*
@@ -106,11 +107,16 @@ export function BuyStampForm() {
           </Field>
         </Form>
 
-        <Banner severity="warning" title="v1.5: Gnosis-only, native xDAI">
+        <Banner
+          severity="warning"
+          title="Fund your Beesnap address on the chain you pay from"
+        >
           <Text>
-            Buys are funded by your Beesnap account (visible on the home
-            page). Make sure it has enough xDAI on Gnosis before you press
-            Get quote.
+            The address on the home screen is the same on every network. Gnosis
+            (xDAI) pays the stamp in one step; on other networks you need the
+            native token for gas (e.g. ETH) on the chain you select — for the
+            final steps on Gnosis, Relay can top up xDAI if the balance is low
+            (extra fee may apply).
           </Text>
         </Banner>
       </Box>
@@ -161,6 +167,8 @@ export async function buildPendingPurchase(opts: {
   days: number;
 }): Promise<PendingPurchase | { error: string }> {
   try {
+    await syncStoredNodeAddressWithWallet();
+
     const chain = SOURCE_CHAINS.find((c) => c.id === opts.chainId);
     const depthOpt = STORAGE_OPTIONS.find((s) => s.depth === opts.depth);
     const dayOpt = TIME_OPTIONS.find((t) => t.days === opts.days);
@@ -168,22 +176,14 @@ export async function buildPendingPurchase(opts: {
       return { error: 'Invalid selection. Please go back and choose again.' };
     }
 
-    // v1.5 constraint: Gnosis-only buys.
-    //
-    // The Snap signs + broadcasts every tx itself with the Snap-derived account,
-    // so there's no MetaMask "current chain" to consider. But Relay's
-    // cross-chain flow requires the source-chain leg to be funded on the
-    // user's address there too — and we'd need to expose the Snap-derived account
-    // on every chain it might receive funds on. Out of scope for v1.5.
-    if (opts.chainId !== 100) {
+    const state = await getState();
+    const nodeAddress = state.settings.nodeAddress?.trim();
+    if (!nodeAddress) {
       return {
-        error: `Cross-chain buys aren't supported yet. Pick "Gnosis (xDAI)" as the source — your Beesnap account just needs xDAI on Gnosis.`,
+        error:
+          'No Swarm node address yet. Open Home (or Settings) so we can reach your Bee API and read GET /wallet, then try again.',
       };
     }
-
-    const state = await getState();
-    const nodeAddress =
-      state.settings.nodeAddress ?? DEFAULT_NODE_ADDRESS;
 
     const { initialBalancePerChunk, totalBzz } = await computeStampBzzAmount({
       depth: opts.depth,
@@ -321,7 +321,7 @@ export function BuyStampDone(r: PurchaseResult) {
           </Banner>
           <Section>
             <Row label="ID">
-              <Text>{r.predictedBatchId}</Text>
+              <Text>{shortHash(r.predictedBatchId, 8, 6)}</Text>
             </Row>
           </Section>
           <Text>

@@ -18,8 +18,21 @@
  * responsible for showing the message to the user.
  */
 
-import { GNOSIS_CHAIN_ID, GNOSIS_RPCS } from './constants';
+import { CHAIN_RPCS, GNOSIS_CHAIN_ID, GNOSIS_RPCS } from './constants';
 import { getBeesnapAccount } from './wallet';
+
+function rpcsForChain(chainId: number): string[] {
+  const list = CHAIN_RPCS[chainId];
+  if (list && list.length > 0) {
+    return list;
+  }
+  if (chainId === GNOSIS_CHAIN_ID) {
+    return GNOSIS_RPCS;
+  }
+  throw new Error(
+    `No RPC list configured for chainId ${chainId}. Add it to CHAIN_RPCS in constants.ts.`,
+  );
+}
 
 // ── eth_call (read-only) ─────────────────────────────────────────────────────
 
@@ -74,15 +87,19 @@ export async function gnosisEthCall(
 
 // ── Receipt polling ──────────────────────────────────────────────────────────
 
-/** Wait for a transaction receipt by polling Gnosis RPC. */
-export async function waitForGnosisReceipt(
+/**
+ * Wait for a transaction receipt on any chain the Snap is configured to use.
+ */
+export async function waitForChainReceipt(
   txHash: string,
+  chainId: number,
   timeoutMs = 5 * 60 * 1000,
   intervalMs = 4000,
 ): Promise<{ status: 'success' | 'reverted' }> {
+  const rpcs = rpcsForChain(chainId);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    for (const rpc of GNOSIS_RPCS) {
+    for (const rpc of rpcs) {
       try {
         const res = await fetch(rpc, {
           method: 'POST',
@@ -109,17 +126,27 @@ export async function waitForGnosisReceipt(
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new Error(`Timed out waiting for receipt ${txHash}`);
+  throw new Error(`Timed out waiting for receipt ${txHash} (chain ${chainId})`);
+}
+
+/** Wait for a Gnosis (100) transaction receipt. */
+export async function waitForGnosisReceipt(
+  txHash: string,
+  timeoutMs = 5 * 60 * 1000,
+  intervalMs = 4000,
+): Promise<{ status: 'success' | 'reverted' }> {
+  return waitForChainReceipt(txHash, GNOSIS_CHAIN_ID, timeoutMs, intervalMs);
 }
 
 // ── Generic JSON-RPC helper for write methods ────────────────────────────────
 
-async function gnosisRpcCall<T>(
+export async function chainJsonRpcCall<T>(
+  chainId: number,
   method: string,
   params: unknown[],
 ): Promise<T> {
   let lastErr: unknown = null;
-  for (const rpc of GNOSIS_RPCS) {
+  for (const rpc of rpcsForChain(chainId)) {
     try {
       const res = await fetch(rpc, {
         method: 'POST',
@@ -152,10 +179,14 @@ async function gnosisRpcCall<T>(
     }
   }
   throw new Error(
-    `${method} on Gnosis failed across all public RPCs: ${
+    `${method} on chain ${chainId} failed across all public RPCs: ${
       lastErr instanceof Error ? lastErr.message : String(lastErr)
     }`,
   );
+}
+
+async function gnosisRpcCall<T>(method: string, params: unknown[]): Promise<T> {
+  return chainJsonRpcCall<T>(GNOSIS_CHAIN_ID, method, params);
 }
 
 // ── Read methods we need to sign + send a tx ─────────────────────────────────
@@ -166,27 +197,25 @@ export async function getGnosisBalance(address: string): Promise<bigint> {
   return BigInt(hex);
 }
 
-async function getNonce(address: string): Promise<number> {
-  const hex = await gnosisRpcCall<string>('eth_getTransactionCount', [
+async function getNonce(chainId: number, address: string): Promise<number> {
+  const hex = await chainJsonRpcCall<string>(chainId, 'eth_getTransactionCount', [
     address,
     'pending',
   ]);
   return Number.parseInt(hex, 16);
 }
 
-async function getGasPrice(): Promise<bigint> {
-  const hex = await gnosisRpcCall<string>('eth_gasPrice', []);
+async function getGasPrice(chainId: number): Promise<bigint> {
+  const hex = await chainJsonRpcCall<string>(chainId, 'eth_gasPrice', []);
   return BigInt(hex);
 }
 
-async function estimateGas(args: {
-  from: string;
-  to: string;
-  data?: string;
-  value?: string;
-}): Promise<bigint> {
+async function estimateGas(
+  chainId: number,
+  args: { from: string; to: string; data?: string; value?: string },
+): Promise<bigint> {
   try {
-    const hex = await gnosisRpcCall<string>('eth_estimateGas', [
+    const hex = await chainJsonRpcCall<string>(chainId, 'eth_estimateGas', [
       {
         from: args.from,
         to: args.to,
@@ -204,8 +233,12 @@ async function estimateGas(args: {
     // We add a hint to the original error so the user (and we) get a real
     // troubleshooting starting point in the UI rather than just "reverted".
     const original = err instanceof Error ? err.message : String(err);
+    const hint =
+      chainId === GNOSIS_CHAIN_ID
+        ? ' not enough xDAI/BZZ on Gnosis, duplicate stamp, or the call would fail on-chain. '
+        : ' not enough native gas on the source chain, or the call would fail on chain. ';
     throw new Error(
-      `eth_estimateGas reverted for ${args.to}. Common causes: not enough xDAI/BZZ in your Beesnap account, the same stamp was already created on a previous attempt (try refreshing "View my stamps"), or the call would fail on-chain. Original: ${original}`,
+      `eth_estimateGas reverted for ${args.to}.${hint}Original: ${original}`,
     );
   }
 }
@@ -213,6 +246,10 @@ async function estimateGas(args: {
 // ── Sign + send transaction ──────────────────────────────────────────────────
 
 export interface SendTxInput {
+  /**
+   * Chain the transaction is broadcast on (must match Relay step `data.chainId`).
+   */
+  chainId: number;
   /** Target contract or EOA. */
   to: string;
   /** 0x-hex calldata, or omitted for a plain ETH/xDAI transfer. */
@@ -228,23 +265,24 @@ export interface SendTxInput {
 }
 
 /**
- * Sign a transaction locally with the Snap-derived account and broadcast it via
- * `eth_sendRawTransaction` against a public Gnosis RPC.
+ * Sign a transaction with the Snap-derived account and broadcast via
+ * `eth_sendRawTransaction` on the given chain.
  *
- * Returns the resulting transaction hash. The caller usually wants to follow
- * up with `waitForGnosisReceipt`.
+ * Returns the transaction hash; follow with `waitForChainReceipt` for the
+ * same `chainId`.
  */
 export async function sendTx(input: SendTxInput): Promise<string> {
+  const { chainId } = input;
   const account = await getBeesnapAccount();
 
   const [nonce, gasPrice] = await Promise.all([
-    getNonce(account.address),
-    getGasPrice(),
+    getNonce(chainId, account.address),
+    getGasPrice(chainId),
   ]);
 
   const gasLimit =
     input.gas ??
-    (await estimateGas({
+    (await estimateGas(chainId, {
       from: account.address,
       to: input.to,
       data: input.data,
@@ -256,9 +294,7 @@ export async function sendTx(input: SendTxInput): Promise<string> {
   // use as a default safety margin.
   const gasLimitBuffered = (gasLimit * 125n) / 100n;
 
-  // EIP-1559 fee parameters. Gnosis supports 1559 since the Donate hardfork.
-  // We set maxFeePerGas to gasPrice * 1.5 and tip to maxFee / 10 — the same
-  // shape the v1 dApp used implicitly via wagmi defaults.
+  // EIP-1559 on all networks we use (Gnosis, mainnet, L2s, Polygon).
   const maxFeePerGas =
     input.maxFeePerGas ?? (gasPrice * 150n) / 100n;
   const maxPriorityFeePerGas =
@@ -267,7 +303,7 @@ export async function sendTx(input: SendTxInput): Promise<string> {
   const valueBig = input.value ? BigInt(input.value) : 0n;
 
   const signed = await account.signTransaction({
-    chainId: GNOSIS_CHAIN_ID,
+    chainId,
     type: 'eip1559',
     nonce,
     gas: gasLimitBuffered,
@@ -278,7 +314,11 @@ export async function sendTx(input: SendTxInput): Promise<string> {
     data: (input.data as `0x${string}`) ?? '0x',
   });
 
-  const txHash = await gnosisRpcCall<string>('eth_sendRawTransaction', [signed]);
+  const txHash = await chainJsonRpcCall<string>(
+    chainId,
+    'eth_sendRawTransaction',
+    [signed],
+  );
   return txHash;
 }
 

@@ -30,7 +30,10 @@ import { Box, Heading, Text } from '@metamask/snaps-sdk/jsx';
 
 import { getBeesnapAddress } from './lib/wallet';
 import { getGnosisBalance } from './lib/ethereum';
-import { fetchNodeWalletAddress } from './lib/bee';
+import {
+  fetchNodeWalletAddress,
+  syncStoredNodeAddressWithWallet,
+} from './lib/bee';
 import { DEFAULT_BEE_API_URL } from './lib/constants';
 
 /**
@@ -86,7 +89,6 @@ import {
   SETTINGS_EVENTS,
   SETTINGS_FIELDS,
   validateBeeApiUrl,
-  validateNodeAddress,
 } from './components/Settings';
 
 // ── onInstall ────────────────────────────────────────────────────────────────
@@ -125,6 +127,8 @@ export const onInstall: OnInstallHandler = async () => {
 // ── Helper: load Home props (Snap-derived address + balance) ────────────────
 
 async function loadHomeProps() {
+  await syncStoredNodeAddressWithWallet();
+
   const beesnapAddress = (await getBeesnapAddress()) as `0x${string}`;
   // Remember the address so it shows up consistently across screens.
   await rememberAccount(beesnapAddress);
@@ -290,6 +294,7 @@ async function handleButton(
     return;
   }
   if (name === NAV_EVENTS.SETTINGS) {
+    await syncStoredNodeAddressWithWallet();
     const state = await getState();
     const effectiveBee = state.settings.beeApiUrl || DEFAULT_BEE_API_URL;
     const probe = await fetchNodeWalletAddress(effectiveBee);
@@ -317,31 +322,31 @@ async function handleButton(
     const state = await getState();
     delete state.settings.beeApiUrl;
     await setState(state);
+    await syncStoredNodeAddressWithWallet();
+    const after = await getState();
+    const probe = await fetchNodeWalletAddress(
+      after.settings.beeApiUrl || DEFAULT_BEE_API_URL,
+    );
+    const liveDefaultNode: SettingsFormProps['liveDefaultNode'] = probe.address
+      ? { ok: true, address: probe.address }
+      : {
+          ok: false,
+          reason: probe.debug.networkError
+            ? probe.debug.networkError
+            : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() ||
+              'no response',
+        };
     await update(
       id,
       <SettingsForm
-        beeApiUrl=""
-        nodeAddress={state.settings.nodeAddress ?? ''}
+        beeApiUrl={after.settings.beeApiUrl ?? ''}
+        nodeAddress={after.settings.nodeAddress ?? ''}
+        liveDefaultNode={liveDefaultNode}
         savedJustNow
       />,
     );
     return;
   }
-  if (name === SETTINGS_EVENTS.RESET_NODE) {
-    const state = await getState();
-    delete state.settings.nodeAddress;
-    await setState(state);
-    await update(
-      id,
-      <SettingsForm
-        beeApiUrl={state.settings.beeApiUrl ?? ''}
-        nodeAddress=""
-        savedJustNow
-      />,
-    );
-    return;
-  }
-
   // ── Buy flow ────────────────────────────────────────────────────────────────
   if (name === BUY_EVENTS.CANCEL) {
     await update(id, <BuyStampForm />);
@@ -434,81 +439,77 @@ async function handleForm(
   // ── Settings form → save ────────────────────────────────────────────────────
   if (name === SETTINGS_EVENTS.SAVE) {
     const beeRaw = String(values[SETTINGS_FIELDS.BEE_API_URL] ?? '').trim();
-    const nodeRaw = String(values[SETTINGS_FIELDS.NODE_ADDRESS] ?? '').trim();
 
-    // Validate + normalize the Bee URL (strips trailing slashes silently).
     const beeRes = validateBeeApiUrl(beeRaw);
     if ('error' in beeRes) {
+      const state = await getState();
+      const probe = await fetchNodeWalletAddress(
+        state.settings.beeApiUrl || DEFAULT_BEE_API_URL,
+      );
+      const liveDefaultNode: SettingsFormProps['liveDefaultNode'] = probe.address
+        ? { ok: true, address: probe.address }
+        : {
+            ok: false,
+            reason: probe.debug.networkError
+              ? probe.debug.networkError
+              : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() ||
+                'no response',
+          };
       await update(
         id,
         <SettingsForm
           beeApiUrl={beeRaw}
-          nodeAddress={nodeRaw}
+          nodeAddress={state.settings.nodeAddress ?? ''}
           validationError={beeRes.error}
+          liveDefaultNode={liveDefaultNode}
         />,
       );
       return;
     }
     const beeClean = beeRes.value;
 
-    const nodeErr = validateNodeAddress(nodeRaw);
-    if (nodeErr) {
-      await update(
-        id,
-        <SettingsForm
-          beeApiUrl={beeClean}
-          nodeAddress={nodeRaw}
-          validationError={nodeErr}
-        />,
-      );
-      return;
-    }
-
-    // Did the Bee URL change? If yes, probe /wallet to auto-detect the
-    // node address for that backend. The user's manually-typed nodeRaw
-    // (if any) is treated as an override that wins over the probe.
     const state = await getState();
-    const previousBee = state.settings.beeApiUrl ?? '';
-    const beeChanged = beeClean !== previousBee;
-
-    let walletProbe: SettingsWalletProbe | undefined;
-    let resolvedNode = nodeRaw;
-
-    if (beeChanged && nodeRaw === '') {
-      const probeUrl = beeClean === '' ? DEFAULT_BEE_API_URL : beeClean;
-      const probe = await fetchNodeWalletAddress(probeUrl);
-      if (probe.address) {
-        resolvedNode = probe.address;
-        walletProbe = {
-          ok: true,
-          nodeAddress: probe.address,
-          from: `${probeUrl}/wallet`,
-        };
-      } else {
-        walletProbe = {
-          ok: false,
-          reason: probe.debug.networkError
-            ? `network: ${probe.debug.networkError}`
-            : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim(),
-          from: `${probeUrl}/wallet`,
-        };
-      }
-    }
-
-    // Persist. Empty string means "clear the override and use the default".
     if (beeClean === '') delete state.settings.beeApiUrl;
     else state.settings.beeApiUrl = beeClean;
-    if (resolvedNode === '') delete state.settings.nodeAddress;
-    else state.settings.nodeAddress = resolvedNode;
     await setState(state);
+    await syncStoredNodeAddressWithWallet();
+
+    const after = await getState();
+    const probeUrl = beeClean || DEFAULT_BEE_API_URL;
+    const probe = await fetchNodeWalletAddress(probeUrl);
+    let walletProbe: SettingsWalletProbe | undefined;
+    if (probe.address) {
+      walletProbe = {
+        ok: true,
+        nodeAddress: probe.address,
+        from: `${probeUrl}/wallet`,
+      };
+    } else {
+      walletProbe = {
+        ok: false,
+        reason: probe.debug.networkError
+          ? `network: ${probe.debug.networkError}`
+          : `${probe.debug.status ?? '?'} ${probe.debug.statusText ?? ''}`.trim() ||
+            'no response',
+        from: `${probeUrl}/wallet`,
+      };
+    }
 
     await update(
       id,
       <SettingsForm
-        beeApiUrl={state.settings.beeApiUrl ?? ''}
-        nodeAddress={state.settings.nodeAddress ?? ''}
+        beeApiUrl={after.settings.beeApiUrl ?? ''}
+        nodeAddress={after.settings.nodeAddress ?? ''}
         savedJustNow
         walletProbe={walletProbe}
+        liveDefaultNode={
+          probe.address
+            ? { ok: true, address: probe.address }
+            : {
+                ok: false,
+                reason: walletProbe && !walletProbe.ok ? walletProbe.reason : 'unreachable',
+              }
+        }
       />,
     );
     return;

@@ -14,7 +14,6 @@ import { ExecutionStatus, UploadStep } from './types';
 import {
   GNOSIS_PRICE_ORACLE_ADDRESS,
   GNOSIS_PRICE_ORACLE_ABI,
-  DEFAULT_NODE_ADDRESS,
   GNOSIS_BZZ_ADDRESS,
   DEFAULT_SWARM_CONFIG,
   STORAGE_OPTIONS,
@@ -129,7 +128,7 @@ const SwapComponent: React.FC = () => {
   const [currentPrice, setCurrentPrice] = useState<bigint | null>(null);
   const [selectedDays, setSelectedDays] = useState<number | null>(null);
   const [selectedDepth, setSelectedDepth] = useState(22);
-  const [nodeAddress, setNodeAddress] = useState<string>(DEFAULT_NODE_ADDRESS);
+  const [nodeAddress, setNodeAddress] = useState<string>('');
   const [isWebpageUpload, setIsWebpageUpload] = useState(false);
   const [isTarFile, setIsTarFile] = useState(false);
   const [isFolderUpload, setIsFolderUpload] = useState(false);
@@ -585,7 +584,7 @@ const SwapComponent: React.FC = () => {
   }, [isConnected, publicClient, walletClient, address, initializeLiFi]);
 
   const fetchAndSetNodeWalletAddress = useCallback(async () => {
-    const address = await fetchNodeWalletAddress(beeApiUrl, DEFAULT_NODE_ADDRESS);
+    const address = await fetchNodeWalletAddress(beeApiUrl);
     setNodeAddress(address);
   }, [beeApiUrl]);
 

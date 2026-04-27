@@ -9,12 +9,8 @@
  * v1 simplification vs the original app:
  *  - Always uses the direct `originCurrency → BZZ` route via `getRelayQuote`
  *    style requests when paying on Gnosis with BZZ-compatible tokens.
- *  - For cross-chain, mirrors `getRelayCrossChainWithSushiQuote` shape: bridge
- *    source → USDC on Gnosis, then SushiSwapStampsRouter.createBatch atomically.
- *  - No gas-balance probing / topupGas yet — the user is on Gnosis or has gas.
- *    The original app's `topupGas` logic is trickier from inside a Snap because
- *    we don't have a viem publicClient handy and probing balance via Gnosis RPC
- *    isn't worth the complexity for v1. We can revisit if users hit this.
+ *  - For other chains, mirrors `getRelayCrossChainWithSushiQuote`: bridge
+ *    native gas token → USDC on Gnosis, then SushiSwapStampsRouter.createBatch.
  */
 
 import { encodeFunctionData, parseAbi } from 'viem';
@@ -27,8 +23,14 @@ import {
   RELAY_STATUS_MAX_ATTEMPTS,
   TRANSACTION_TIMEOUT_MS,
   DEFAULT_SLIPPAGE_PERCENT,
+  RELAY_BRIDGE_TOKEN_ON_GNOSIS,
+  SUSHI_STAMPS_ROUTER_ADDRESS,
+  GAS_TOPUP_THRESHOLD_WEI,
+  GAS_TOPUP_AMOUNT_USD,
 } from './constants';
-import { POSTAGE_STAMP_ABI } from './abis';
+import { POSTAGE_STAMP_ABI, SUSHI_STAMPS_ROUTER_ABI } from './abis';
+import { getGnosisBalance } from './ethereum';
+import { getBridgeUsdcToBzzPathAndMaxIn } from './sushi-gnosis-stamp';
 
 // ── Types matching the Relay API ─────────────────────────────────────────────
 
@@ -44,6 +46,8 @@ export interface RelayQuoteRequest {
   txs?: Array<{ to: string; value: string; data: string }>;
   slippageTolerance?: string;
   refundOnOrigin?: boolean;
+  topupGas?: boolean;
+  topupGasAmount?: string;
 }
 
 export interface RelayStepItem {
@@ -138,13 +142,18 @@ const MAX_UINT256 =
  * routing — i.e. Relay routes `originCurrency → BZZ on Gnosis`, then runs the
  * `txs` (BZZ infinite approve + createBatchRegistry) atomically on arrival.
  *
- * Returns the raw Relay response plus a few derived numbers for display.
+ * Gnosis: direct to BZZ + createBatchRegistry. Other chains: USDC on Gnosis +
+ * Sushi `createBatch` (see `getCrossChainStampQuote`).
  */
 export async function getStampQuote(input: BuyStampQuoteInput): Promise<{
   quote: RelayQuoteResponse;
   totalAmountUSD: number;
   estimatedTimeSeconds: number;
 }> {
+  if (input.selectedChainId !== GNOSIS_CHAIN_ID) {
+    return getCrossChainStampQuote(input);
+  }
+
   const contractCall = buildCreateBatchCalldata(input);
 
   // Always prepend an infinite BZZ approval so the registry can pull funds.
@@ -206,6 +215,104 @@ export async function getStampQuote(input: BuyStampQuoteInput): Promise<{
   const estimatedTimeSeconds = Math.ceil(
     quote.details.timeEstimate ?? 0,
   );
+
+  return { quote, totalAmountUSD, estimatedTimeSeconds };
+}
+
+/**
+ * Non-Gnosis: Relay bridges source native token → USDC on Gnosis, then the
+ * Multicaller runs USDC.approve + SushiSwapStampsRouter.createBatch (same as
+ * `getRelayCrossChainWithSushiQuote` in the web app).
+ */
+async function getCrossChainStampQuote(
+  input: BuyStampQuoteInput,
+): Promise<{
+  quote: RelayQuoteResponse;
+  totalAmountUSD: number;
+  estimatedTimeSeconds: number;
+}> {
+  const bzzOut = BigInt(input.bzzAmount);
+  const slip = input.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT;
+
+  const { maxAmountIn, path } = await getBridgeUsdcToBzzPathAndMaxIn(
+    bzzOut,
+    slip,
+  );
+
+  const approvalData = encodeFunctionData({
+    abi: ERC20_APPROVE_ABI,
+    functionName: 'approve',
+    args: [SUSHI_STAMPS_ROUTER_ADDRESS as `0x${string}`, maxAmountIn],
+  });
+
+  const createBatchData = encodeFunctionData({
+    abi: SUSHI_STAMPS_ROUTER_ABI,
+    functionName: 'createBatch',
+    args: [
+      path,
+      maxAmountIn,
+      bzzOut,
+      {
+        owner: input.address as `0x${string}`,
+        nodeAddress: input.nodeAddress as `0x${string}`,
+        initialBalancePerChunk: BigInt(input.initialBalancePerChunk),
+        depth: input.depth,
+        bucketDepth: input.bucketDepth,
+        nonce: input.nonce,
+        immutable_: input.immutable,
+      },
+    ],
+  });
+
+  const txs: RelayQuoteRequest['txs'] = [
+    { to: RELAY_BRIDGE_TOKEN_ON_GNOSIS, value: '0', data: approvalData },
+    { to: SUSHI_STAMPS_ROUTER_ADDRESS, value: '0', data: createBatchData },
+  ];
+
+  const bal = await getGnosisBalance(input.address);
+  const shouldTopupGas = bal < GAS_TOPUP_THRESHOLD_WEI;
+  const slippageBps = Math.round(slip * 100).toString();
+
+  const body: RelayQuoteRequest = {
+    user: input.address,
+    recipient: input.address,
+    originChainId: input.selectedChainId,
+    destinationChainId: GNOSIS_CHAIN_ID,
+    originCurrency: input.fromToken,
+    destinationCurrency: RELAY_BRIDGE_TOKEN_ON_GNOSIS,
+    amount: maxAmountIn.toString(),
+    tradeType: 'EXACT_OUTPUT',
+    txs,
+    slippageTolerance: slippageBps,
+    refundOnOrigin: true,
+    topupGas: shouldTopupGas,
+    ...(shouldTopupGas && { topupGasAmount: GAS_TOPUP_AMOUNT_USD }),
+  };
+
+  const res = await fetch(`${RELAY_API_BASE}/quote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    let parsed: { errorCode?: string; message?: string } = {};
+    try {
+      parsed = JSON.parse(errText);
+    } catch {
+      /* not json */
+    }
+    throw new Error(
+      parsed.message ??
+        parsed.errorCode ??
+        `Relay cross-chain quote failed (${res.status}): ${errText.slice(0, 200)}`,
+    );
+  }
+
+  const quote = (await res.json()) as RelayQuoteResponse;
+  const totalAmountUSD = Number(quote.details.currencyIn.amountUsd ?? 0);
+  const estimatedTimeSeconds = Math.ceil(quote.details.timeEstimate ?? 0);
 
   return { quote, totalAmountUSD, estimatedTimeSeconds };
 }
@@ -286,7 +393,7 @@ function sleep(ms: number): Promise<void> {
 
 // ── Step execution ───────────────────────────────────────────────────────────
 
-import { sendTx, waitForGnosisReceipt } from './ethereum';
+import { sendTx, waitForChainReceipt } from './ethereum';
 import { describeError } from './utils';
 
 export interface ExecuteContext {
@@ -299,12 +406,8 @@ export interface ExecuteContext {
  * Snap-derived account (via `sendTx`) and polling Relay's status endpoint between
  * steps where applicable.
  *
- * v1.5 only supports Gnosis-on-Gnosis purchases. The pre-flight chain check
- * in BuyStamp guarantees `data.chainId === GNOSIS_CHAIN_ID` for every item;
- * we still validate per-tx and throw on mismatch as a defensive measure.
- *
- * Returns when every step is complete; throws on the first failure with a
- * user-friendly message.
+ * For each `data.chainId` from Relay, signs and sends on that chain, then
+ * waits for a receipt (Gnosis, Ethereum, or an L2).
  */
 export async function executeRelaySteps(
   quote: RelayQuoteResponse,
@@ -323,15 +426,11 @@ export async function executeRelaySteps(
 
       if (item.status === 'incomplete' && item.data) {
         const data = item.data;
-        if (data.chainId !== GNOSIS_CHAIN_ID) {
-          throw new Error(
-            `Step "${step.id}" wants chain ${data.chainId}, but v1 only supports Gnosis (100). The Relay quote shouldn't have produced this — please report it.`,
-          );
-        }
 
         let txHash: string;
         try {
           txHash = await sendTx({
+            chainId: data.chainId,
             to: data.to,
             data: data.data,
             value: data.value && data.value !== '0' ? toHexBig(data.value) : '0x0',
@@ -349,8 +448,9 @@ export async function executeRelaySteps(
 
         ctx.onStatus(`Waiting for transaction confirmation…`);
 
-        const receipt = await waitForGnosisReceipt(
+        const receipt = await waitForChainReceipt(
           txHash,
+          data.chainId,
           TRANSACTION_TIMEOUT_MS,
         );
         if (receipt.status !== 'success') {

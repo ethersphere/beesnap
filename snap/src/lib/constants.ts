@@ -58,6 +58,9 @@ export const GNOSIS_CUSTOM_REGISTRY_ADDRESS =
 
 export const GNOSIS_BZZ_ADDRESS = '0xdBF3Ea6F5beE45c02255B2c26a16F300502F68da';
 
+export const GNOSIS_WXDAI_ADDRESS =
+  '0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d';
+
 export const GNOSIS_STAMP_ADDRESS = '0x45a1502382541Cd610CC9068e88727426b696293';
 
 export const GNOSIS_PRICE_ORACLE_ADDRESS =
@@ -75,8 +78,21 @@ export const RELAY_BRIDGE_TOKEN_SYMBOL = 'USDC';
 export const SUSHI_STAMPS_ROUTER_ADDRESS =
   '0xf244cC25EAD03a99de8B407A3237aaf54D1b779C';
 
-/** Default Swarm node address used as the postage batch's nodeAddress field. */
-export const DEFAULT_NODE_ADDRESS = '0x5cb4839B7d7b0ab6BaAbFEdD6749497ECa65b2Ca';
+/** SushiSwap V3 factory on Gnosis (pool discovery for USDC → BZZ quotes). */
+export const SUSHI_FACTORY_ADDRESS =
+  '0xf78031cbca409f2fb6876bdfdbc1b2df24cf9bef';
+
+/**
+ * Gnosis: minimum native xDAI on the Beesnap address to skip Relay `topupGas`
+ * on the destination (cross-chain buys). Mirrors the web app.
+ */
+export const GAS_TOPUP_THRESHOLD_XDAI = 1.0;
+export const GAS_TOPUP_THRESHOLD_WEI = 1_000_000_000_000_000_000n; // 1.0 xDAI
+/** Relay API: micro-USD string ($1 = 1_000_000). */
+export const GAS_TOPUP_AMOUNT_USD = '1000000';
+
+// Swarm `nodeAddress` for new stamps comes from GET `${beeApiUrl}/wallet` only
+// (see `syncStoredNodeAddressWithWallet` in bee.ts) — never a hardcoded preset.
 
 // ── Relay API ─────────────────────────────────────────────────────────────────
 
@@ -135,6 +151,23 @@ export type SourceChain = {
  * subset that has reliable Relay liquidity and that fits in a Snap dropdown.
  * Add more chains here when needed — Relay does the heavy lifting per chain.
  */
+/**
+ * Public RPC URLs per chain id (primary + fallbacks) for `eth_sendRawTransaction`
+ * and receipts. Key must include every `SOURCE_CHAINS` id.
+ */
+export const CHAIN_RPCS: Record<number, string[]> = {
+  100: [
+    'https://rpc.gnosischain.com',
+    'https://rpc.gnosis.gateway.fm',
+    'https://gnosis.drpc.org',
+  ],
+  1: ['https://eth.llamarpc.com', 'https://rpc.ankr.com/eth'],
+  8453: ['https://mainnet.base.org', 'https://base.drpc.org'],
+  42161: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum.drpc.org'],
+  10: ['https://mainnet.optimism.io', 'https://optimism.drpc.org'],
+  137: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'],
+};
+
 export const SOURCE_CHAINS: SourceChain[] = [
   {
     id: 100,

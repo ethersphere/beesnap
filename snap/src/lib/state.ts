@@ -38,7 +38,10 @@ export interface UploadRecord {
 export interface SnapSettings {
   /** Override for the Bee API proxy URL. Defaults to DEFAULT_BEE_API_URL. */
   beeApiUrl?: string;
-  /** Override for the Swarm node address. Defaults to DEFAULT_NODE_ADDRESS. */
+  /**
+   * Swarm node wallet address from GET `${beeApiUrl}/wallet` (see
+   * `syncStoredNodeAddressWithWallet`). No hardcoded default.
+   */
   nodeAddress?: string;
 }
 

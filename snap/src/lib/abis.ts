@@ -84,3 +84,52 @@ export const POSTAGE_STAMP_ABI = [
     type: 'function',
   },
 ] as const;
+
+/** SushiSwapStampsRouter: quotes + `createBatch` (Relay USDC path on Gnosis). */
+export const SUSHI_STAMPS_ROUTER_ABI = [
+  {
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+      { name: 'bzzAmountOut', type: 'uint256' },
+    ],
+    name: 'quoteSingleHop',
+    outputs: [{ name: 'amountIn', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'path', type: 'bytes' },
+      { name: 'bzzAmountOut', type: 'uint256' },
+    ],
+    name: 'quoteMultiHop',
+    outputs: [{ name: 'amountIn', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'path', type: 'bytes' },
+      { name: 'maxAmountIn', type: 'uint256' },
+      { name: 'bzzAmountOut', type: 'uint256' },
+      {
+        components: [
+          { name: 'owner', type: 'address' },
+          { name: 'nodeAddress', type: 'address' },
+          { name: 'initialBalancePerChunk', type: 'uint256' },
+          { name: 'depth', type: 'uint8' },
+          { name: 'bucketDepth', type: 'uint8' },
+          { name: 'nonce', type: 'bytes32' },
+          { name: 'immutable_', type: 'bool' },
+        ],
+        name: 'p',
+        type: 'tuple',
+      },
+    ],
+    name: 'createBatch',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
