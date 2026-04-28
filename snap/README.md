@@ -43,7 +43,7 @@ The page detects MetaMask and prompts you to install Beesnap with `wallet_reques
                             ▼
               ┌───────────────────────────────┐
               │  Default: beeport.xyz proxy   │
-              │  or local / remote Bee URL   │
+              │  or local / remote Bee URL    │
               └───────────────────────────────┘
                             │
                   ┌─────────┴──────────┐
