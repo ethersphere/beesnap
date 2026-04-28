@@ -83,7 +83,8 @@ export function describeError(err: unknown): string {
   }
   try {
     return JSON.stringify(err);
-  } catch {
+  } catch (e: unknown) {
+    void e;
     return String(err);
   }
 }

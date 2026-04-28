@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react';
 
 const SNAP_ID = process.env.NEXT_PUBLIC_SNAP_ID || 'local:http://localhost:8080';
-const SNAP_VERSION = process.env.NEXT_PUBLIC_SNAP_VERSION || '0.1.2';
+const SNAP_VERSION = process.env.NEXT_PUBLIC_SNAP_VERSION || '0.1.3';
 
 const IS_LOCAL_SNAP = SNAP_ID.startsWith('local:');
 

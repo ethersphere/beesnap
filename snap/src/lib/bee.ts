@@ -71,14 +71,12 @@ export async function fetchStampInfo(
 ): Promise<StampFetchOutcome> {
   const id = batchId.startsWith('0x') ? batchId.slice(2) : batchId;
   const url = `${beeApiUrl}/stamps/${id}`;
-  console.log(`[bee] GET ${url}`);
 
   let res: Response;
   try {
     res = await fetch(url);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[bee] network error for ${url}:`, err);
     return {
       info: null,
       debug: { url, networkError: msg },
@@ -86,15 +84,12 @@ export async function fetchStampInfo(
   }
 
   const contentType = res.headers.get('content-type');
-  console.log(
-    `[bee] ${url} → ${res.status} ${res.statusText} (content-type: ${contentType ?? 'none'})`
-  );
 
   let bodyText: string;
   try {
     bodyText = await res.text();
-  } catch (err) {
-    console.error(`[bee] failed to read body for ${url}:`, err);
+  } catch (err: unknown) {
+    void err;
     return {
       info: null,
       debug: {
@@ -107,8 +102,6 @@ export async function fetchStampInfo(
     };
   }
 
-  console.log(`[bee] ${url} body:`, bodyText.slice(0, 500));
-
   const debug: StampFetchDebug = {
     url,
     status: res.status,
@@ -118,21 +111,14 @@ export async function fetchStampInfo(
   };
 
   if (!res.ok) {
-    console.warn(
-      `[bee] non-OK status ${res.status} for ${url}; treating as "stamp not yet visible to Bee"`
-    );
     return { info: null, debug };
   }
 
   try {
     const info = JSON.parse(bodyText) as StampInfo;
     return { info, debug };
-  } catch (err) {
-    console.error(
-      `[bee] OK status but body was not valid JSON for ${url}:`,
-      err,
-      bodyText.slice(0, 200)
-    );
+  } catch (err: unknown) {
+    void err;
     return { info: null, debug };
   }
 }
@@ -153,14 +139,12 @@ export interface NodeWalletProbe {
 
 export async function fetchNodeWalletAddress(beeApiUrl: string): Promise<NodeWalletProbe> {
   const url = `${beeApiUrl}/wallet`;
-  console.log(`[bee] GET ${url}`);
 
   let res: Response;
   try {
     res = await fetch(url);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[bee] /wallet network error:`, err);
     return { address: null, debug: { url, networkError: msg } };
   }
 
@@ -168,8 +152,8 @@ export async function fetchNodeWalletAddress(beeApiUrl: string): Promise<NodeWal
   let bodyText = '';
   try {
     bodyText = await res.text();
-  } catch (err) {
-    console.error(`[bee] /wallet body read failed:`, err);
+  } catch (err: unknown) {
+    void err;
   }
 
   const debug: StampFetchDebug = {
@@ -181,20 +165,18 @@ export async function fetchNodeWalletAddress(beeApiUrl: string): Promise<NodeWal
   };
 
   if (!res.ok) {
-    console.warn(`[bee] /wallet returned ${res.status}; not auto-updating node address`);
     return { address: null, debug };
   }
 
   let parsed: { walletAddress?: string };
   try {
     parsed = JSON.parse(bodyText);
-  } catch (err) {
-    console.error(`[bee] /wallet body was not JSON:`, err);
+  } catch (err: unknown) {
+    void err;
     return { address: null, debug };
   }
 
   if (!parsed.walletAddress || typeof parsed.walletAddress !== 'string') {
-    console.warn(`[bee] /wallet response had no walletAddress field`);
     return { address: null, debug };
   }
 
@@ -202,10 +184,8 @@ export async function fetchNodeWalletAddress(beeApiUrl: string): Promise<NodeWal
   // The Bee API returns it without 0x; tolerate either form.
   const withPrefix = (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`;
   if (!/^0x[a-fA-F0-9]{40}$/.test(withPrefix)) {
-    console.warn(`[bee] /wallet returned invalid address shape: ${raw}`);
     return { address: null, debug };
   }
-  console.log(`[bee] /wallet → node address ${withPrefix}`);
   return { address: withPrefix, debug };
 }
 
@@ -294,7 +274,6 @@ export async function uploadFile(params: UploadParams): Promise<UploadOutcome> {
   }
 
   const url = `${beeApiUrl}/bzz?name=${encodeURIComponent(filename)}`;
-  console.log(`[bee] POST ${url} (${bytes.length} bytes)`);
 
   // Body shape: see "Sandbox does not expose Blob" caveat above. Plain
   // ArrayBuffer is what `fetch` accepts and what the Snap sandbox provides.
@@ -312,7 +291,6 @@ export async function uploadFile(params: UploadParams): Promise<UploadOutcome> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[bee] upload network error for ${url}:`, err);
     return { ok: false, debug: { url, networkError: msg } };
   }
 
@@ -320,14 +298,9 @@ export async function uploadFile(params: UploadParams): Promise<UploadOutcome> {
   let bodyText = '';
   try {
     bodyText = await res.text();
-  } catch (err) {
-    console.error(`[bee] failed to read upload response body:`, err);
+  } catch (err: unknown) {
+    void err;
   }
-
-  console.log(
-    `[bee] ${url} → ${res.status} ${res.statusText} (content-type: ${responseContentType ?? 'none'}) body:`,
-    bodyText.slice(0, 500)
-  );
 
   const debug: StampFetchDebug = {
     url,
@@ -344,7 +317,8 @@ export async function uploadFile(params: UploadParams): Promise<UploadOutcome> {
   let parsed: { reference?: string };
   try {
     parsed = JSON.parse(bodyText);
-  } catch {
+  } catch (err: unknown) {
+    void err;
     // 200 OK but body wasn't JSON we can parse. Treat as failure with the
     // body excerpt so the user sees exactly what came back.
     return { ok: false, debug };

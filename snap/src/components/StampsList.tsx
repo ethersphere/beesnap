@@ -128,21 +128,11 @@ export function countResolvedStamps(d: StampsLoadResult): number {
 export async function loadStamps(account: string): Promise<StampsLoadResult> {
   const state = await getState();
   const beeApiUrl = state.settings.beeApiUrl ?? DEFAULT_BEE_API_URL;
-  console.log(`[stamps] loading for account ${account} via ${beeApiUrl}`);
 
   let batches: RegistryBatch[];
   try {
     batches = await getOwnerBatches(account);
-    console.log(
-      `[stamps] registry returned ${batches.length} batch(es):`,
-      batches.map(b => ({
-        batchId: b.batchId,
-        depth: b.depth,
-        nodeAddress: b.nodeAddress,
-      }))
-    );
   } catch (err) {
-    console.error(`[stamps] registry read failed:`, err);
     return {
       batches: [],
       stamps: {},
@@ -158,9 +148,8 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
   try {
     const probe = await fetchNodeWalletAddress(beeApiUrl);
     currentNodeAddress = probe.address;
-    console.log(`[stamps] current Bee node address: ${currentNodeAddress ?? 'unknown'}`);
-  } catch (err) {
-    console.warn(`[stamps] /wallet probe failed:`, err);
+  } catch (err: unknown) {
+    void err; // /wallet optional; UI treats node binding as unknown
   }
 
   // Fetch per-stamp info in parallel. We tolerate per-stamp failures.
@@ -181,17 +170,8 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
           // Don't count "wrong node" as a "still resolving" warning — those
           // will never resolve from this Bee, by design.
           if (boundToCurrentNode !== false) hadStampError = true;
-          console.warn(`[stamps] no Bee data for ${b.batchId} yet`, outcome.debug);
-        } else {
-          console.log(`[stamps] resolved ${b.batchId}:`, {
-            usable: outcome.info.usable,
-            depth: outcome.info.depth,
-            utilization: outcome.info.utilization,
-            batchTTL: outcome.info.batchTTL,
-          });
         }
       } catch (err) {
-        console.error(`[stamps] fetchStampInfo threw for ${b.batchId}:`, err);
         stamps[idNoPrefix] = {
           info: null,
           debug: {
@@ -205,11 +185,6 @@ export async function loadStamps(account: string): Promise<StampsLoadResult> {
     })
   );
 
-  console.log(
-    `[stamps] done. ${
-      Object.values(stamps).filter(s => s.info !== null).length
-    }/${batches.length} resolved.`
-  );
   return { batches, stamps, registryError: undefined, hadStampError };
 }
 

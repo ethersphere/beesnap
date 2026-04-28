@@ -100,7 +100,7 @@ export const onInstall: OnInstallHandler = async () => {
   try {
     address = await getBeesnapAddress();
   } catch (err) {
-    address = '(failed to derive — see Snap logs)';
+    address = '(failed to derive address — try reinstalling the Snap)';
   }
 
   await snap.request({
@@ -138,8 +138,8 @@ async function loadHomeProps() {
       try {
         const wei = await getNativeBalance(beesnapAddress, c.id);
         return { chainId: c.id, name: c.name, symbol: c.symbol, wei };
-      } catch (err) {
-        console.warn(`[home] native balance chain ${c.id} failed:`, err);
+      } catch (err: unknown) {
+        void err;
         return { chainId: c.id, name: c.name, symbol: c.symbol, wei: null };
       }
     })
@@ -279,7 +279,8 @@ async function handleButton(
     let data: StampsLoadResult;
     try {
       data = deserializeStampsFromContext(raw);
-    } catch {
+    } catch (err: unknown) {
+      void err;
       return;
     }
     const prev = (context?.otherNodeGroupOpen as boolean | undefined) ?? false;
@@ -694,7 +695,8 @@ async function runStampsPoll(
     let fresh: StampsLoadResult;
     try {
       fresh = await loadStamps(account);
-    } catch {
+    } catch (err: unknown) {
+      void err;
       // A transient error during polling shouldn't kill the loop. Try again.
       continue;
     }

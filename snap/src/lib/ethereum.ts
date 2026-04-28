@@ -117,7 +117,8 @@ export async function waitForChainReceipt(
             status: json.result.status === '0x1' ? 'success' : 'reverted',
           };
         }
-      } catch {
+      } catch (err: unknown) {
+        void err;
         // Try the next RPC.
       }
     }

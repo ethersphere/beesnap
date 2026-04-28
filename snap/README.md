@@ -71,7 +71,6 @@ Beesnap derives a dedicated Ethereum address from your MetaMask secret recovery 
 | `endowment:page-home` | Renders the Beesnap tab inside MetaMask |
 | `snap_dialog` | Welcome dialog on first install |
 | `snap_manageState` | Persistent encrypted local state (upload history, settings) |
-| `snap_notify` | Reserved for future use |
 | `snap_getEntropy` | Derives the Beesnap address from your recovery phrase |
 
 Beesnap deliberately does **not** request `endowment:ethereum-provider` — it never touches your normal MetaMask accounts.

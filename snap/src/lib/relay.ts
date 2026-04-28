@@ -200,8 +200,8 @@ export async function getStampQuote(input: BuyStampQuoteInput): Promise<{
     let parsed: { errorCode?: string; message?: string } = {};
     try {
       parsed = JSON.parse(errText);
-    } catch {
-      /* not json */
+    } catch (err: unknown) {
+      void err;
     }
     throw new Error(
       parsed.message ??
@@ -293,8 +293,8 @@ async function getCrossChainStampQuote(input: BuyStampQuoteInput): Promise<{
     let parsed: { errorCode?: string; message?: string } = {};
     try {
       parsed = JSON.parse(errText);
-    } catch {
-      /* not json */
+    } catch (err: unknown) {
+      void err;
     }
     throw new Error(
       parsed.message ??

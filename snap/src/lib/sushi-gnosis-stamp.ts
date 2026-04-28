@@ -60,7 +60,8 @@ async function poolHasLiquidity(pool: `0x${string}`): Promise<boolean> {
     });
     const r = await gnosisEthCall(pool, data);
     return BigInt(r) > 0n;
-  } catch {
+  } catch (err: unknown) {
+    void err;
     return false;
   }
 }
@@ -86,8 +87,8 @@ async function findDirectBzzPool(
       if (await poolHasLiquidity(p)) {
         return { pool: p, fee };
       }
-    } catch {
-      /* try next */
+    } catch (err: unknown) {
+      void err;
     }
   }
   return null;
@@ -124,8 +125,8 @@ async function findPoolBetween(
         poolPairCache[key] = v;
         return v;
       }
-    } catch {
-      /* */
+    } catch (err: unknown) {
+      void err;
     }
   }
   poolPairCache[key] = null;

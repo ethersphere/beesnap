@@ -54,3 +54,7 @@ misc/registry_data_2.json
 backend/backend.log
 ci/webhook-logs.txt
 deploy-log.txt
+
+# Snapper (@sayfer_io/snapper) output at repo root
+result-*.json
+snapper-result.json

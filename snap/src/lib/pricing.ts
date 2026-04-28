@@ -35,8 +35,8 @@ export async function fetchCurrentPrice(): Promise<bigint> {
       data: raw as `0x${string}`,
     });
     return BigInt(decoded as number);
-  } catch (err) {
-    console.error('fetchCurrentPrice fallback:', err);
+  } catch (err: unknown) {
+    void err;
     return FALLBACK_PRICE_PER_CHUNK_PER_BLOCK;
   }
 }

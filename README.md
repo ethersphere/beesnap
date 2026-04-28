@@ -52,6 +52,8 @@ Two things ship separately: the **Snap** (npm; MetaMask downloads it by id + ver
 
 ### Snap on npm (`snap/`, package `@beesnap/snap`)
 
+Before a directory / allowlist submission, MetaMask expects a clean bundle: **no `console.*` in shipped code**, **no unused manifest permissions**, and a run of **[Snapper](https://github.com/sayfer-io/Snapper)** (`npx @sayfer_io/snapper --path ./snap` from the repo root). Many Snapper findings are low-severity style; triage high-severity items. Obvious false positives (e.g. `Content-Type: application/json` flagged as a “secret”) can be explained in your submission.
+
 1. **Bump the version** — Use the same semver in `snap/package.json` and in `snap/snap.manifest.json` (`version`). Optionally run `npm install` inside `snap/` so `package-lock.json` stays in sync.
 2. **Build** — From the repo root: `npm run snap:build` (or `cd snap && npm run build`). This compiles `snap/dist/bundle.js` and fixes `snap.manifest.json` if the bundle `shasum` is out of date.
 3. **Commit** — Commit the version bumps, manifest, and any lockfile changes so the tree matches what you publish.
@@ -67,7 +69,7 @@ The install UI lives in `src/app/`. For **production**, `next.config.mjs` enable
    - `NEXT_PUBLIC_SNAP_VERSION=<same semver as on npm>` (must match the version you published, or MetaMask may refuse / install the wrong build).
 
    Put these in **`.env.production.local`** at the repo root (Next loads it for production builds), or export them for a one-off build, e.g.  
-   `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap NEXT_PUBLIC_SNAP_VERSION=0.1.2 npm run build`.
+   `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap NEXT_PUBLIC_SNAP_VERSION=0.1.3 npm run build`.
 
 2. **Build** — From the repo root: `npm run build`. Verify `out/index.html` and the `_next` assets exist.
 
