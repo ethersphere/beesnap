@@ -1,17 +1,34 @@
 {
   "name": "@beesnap/snap",
-  "version": "0.1.0",
-  "description": "Ethereum Swarm MetaMask extension — Swarm bee storage with Snaps (Beesnap).",
+  "version": "0.1.2",
+  "description": "Ethereum Swarm MetaMask Snap — buy storage on Swarm and upload files to a Bee node from inside MetaMask.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/0xCardiE/beesnap.git",
+    "url": "https://github.com/ethersphere/beesnap.git",
     "directory": "snap"
   },
+  "homepage": "https://github.com/ethersphere/beesnap#readme",
+  "bugs": {
+    "url": "https://github.com/ethersphere/beesnap/issues"
+  },
+  "license": "BSD-3-Clause",
+  "author": "Ethereum Swarm",
+  "keywords": [
+    "metamask",
+    "snap",
+    "swarm",
+    "ethswarm",
+    "bee",
+    "decentralized-storage",
+    "postage-stamp"
+  ],
   "main": "dist/bundle.js",
   "files": [
     "dist/",
     "images/",
-    "snap.manifest.json"
+    "snap.manifest.json",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "mm-snap build",
