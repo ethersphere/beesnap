@@ -21,6 +21,7 @@ swap_uploader.tar
 # misc
 .DS_Store
 *.pem
+out.zip
 
 # debug
 npm-debug.log*

@@ -44,7 +44,36 @@ npm run dev
 
 1. **Snap server must be running** — the install page does not host the bundle. Keep `npm run snap:dev` (or, after a build, `npm run snap:serve`) in another terminal. Open `http://localhost:8080` in a browser to confirm the server responds. If you see **`EADDRINUSE` on 8080**, stop the other process using that port or change `server.port` in `snap/snap.config.ts` and set the same value in `NEXT_PUBLIC_SNAP_ID` for the Next app.
 2. **Many different Snaps fail** in MetaMask: usually a **MetaMask or browser** issue, not this repo. Try: restart the browser, update the extension, or a clean profile.
-3. **Production** — set `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap` (and a matching version) so you are not using localhost.
+3. **Production** — set `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap` and `NEXT_PUBLIC_SNAP_VERSION` to the published Snap version (see [Publishing new versions](#publishing-new-versions) below).
+
+## Publishing new versions
+
+Two things ship separately: the **Snap** (npm; MetaMask downloads it by id + version) and the **install page** (static files under `out/` after a production build, then zip or rsync to your host).
+
+### Snap on npm (`snap/`, package `@beesnap/snap`)
+
+1. **Bump the version** — Use the same semver in `snap/package.json` and in `snap/snap.manifest.json` (`version`). Optionally run `npm install` inside `snap/` so `package-lock.json` stays in sync.
+2. **Build** — From the repo root: `npm run snap:build` (or `cd snap && npm run build`). This compiles `snap/dist/bundle.js` and fixes `snap.manifest.json` if the bundle `shasum` is out of date.
+3. **Commit** — Commit the version bumps, manifest, and any lockfile changes so the tree matches what you publish.
+4. **Publish** — `cd snap && npm publish --access public`. Scoped packages need `--access public`. If npm enforces 2FA, pass a one-time password: `npm publish --access public --otp=<code>`.
+5. **Check** — Confirm the new version appears on [npmjs.com/package/@beesnap/snap](https://www.npmjs.com/package/@beesnap/snap).
+
+### Install site: `out/` export, version env, zip, upload
+
+The install UI lives in `src/app/`. For **production**, `next.config.mjs` enables `output: 'export'`, so `next build` writes a **static site into `out/`** (that directory is gitignored).
+
+1. **Point the build at the Snap you want users to install** — `wallet_requestSnaps` uses the id and version baked in at build time (`src/app/page.tsx`). Set:
+   - `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap`
+   - `NEXT_PUBLIC_SNAP_VERSION=<same semver as on npm>` (must match the version you published, or MetaMask may refuse / install the wrong build).
+
+   Put these in **`.env.production.local`** at the repo root (Next loads it for production builds), or export them for a one-off build, e.g.  
+   `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap NEXT_PUBLIC_SNAP_VERSION=0.1.2 npm run build`.
+
+2. **Build** — From the repo root: `npm run build`. Verify `out/index.html` and the `_next` assets exist.
+
+3. **Package for upload** — Example: `cd out && zip -r ../beesnap-install-site.zip .` then upload the zip to your server and unpack into the web root, or sync `out/` directly (rsync, CI artifact, etc.) wherever you serve the install link (often alongside nginx / beeport; see `backend/README.md`).
+
+Whenever you release a **new Snap version on npm**, repeat this install-site flow with the **updated `NEXT_PUBLIC_SNAP_VERSION`** so the published page requests the new build.
 
 ## What the Snap does (high level)
 
