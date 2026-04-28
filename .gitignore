@@ -22,6 +22,7 @@ swap_uploader.tar
 .DS_Store
 *.pem
 out.zip
+beesnap-install-site.zip
 
 # debug
 npm-debug.log*

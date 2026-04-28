@@ -71,7 +71,7 @@ The install UI lives in `src/app/`. For **production**, `next.config.mjs` enable
 
 2. **Build** — From the repo root: `npm run build`. Verify `out/index.html` and the `_next` assets exist.
 
-3. **Package for upload** — Example: `cd out && zip -r ../beesnap-install-site.zip .` then upload the zip to your server and unpack into the web root, or sync `out/` directly (rsync, CI artifact, etc.) wherever you serve the install link (often alongside nginx / beeport; see `backend/README.md`).
+3. **Package for upload** — Example: `cd out && zip -r ../beesnap-install-site.zip .` (the zip name is gitignored at the repo root) then upload the zip to your server and unpack into the web root, or sync `out/` directly (rsync, CI artifact, etc.) wherever you serve the install link (often alongside nginx / beeport; see `backend/README.md`).
 
 Whenever you release a **new Snap version on npm**, repeat this install-site flow with the **updated `NEXT_PUBLIC_SNAP_VERSION`** so the published page requests the new build.
 
