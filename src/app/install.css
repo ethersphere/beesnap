@@ -50,6 +50,7 @@ html, body {
   border-radius: 14px;
   object-fit: cover;
   flex-shrink: 0;
+  background: #ffffff;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
 }
 
