@@ -69,7 +69,7 @@ The install UI lives in `src/app/`. For **production**, `next.config.mjs` enable
    - `NEXT_PUBLIC_SNAP_VERSION=<same semver as on npm>` (must match the version you published, or MetaMask may refuse / install the wrong build).
 
    Put these in **`.env.production.local`** at the repo root (Next loads it for production builds), or export them for a one-off build, e.g.  
-   `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap NEXT_PUBLIC_SNAP_VERSION=0.1.4 npm run build`.
+   `NEXT_PUBLIC_SNAP_ID=npm:@beesnap/snap NEXT_PUBLIC_SNAP_VERSION=0.1.5 npm run build`.
 
 2. **Build** — From the repo root: `npm run build`. Verify `out/index.html` and the `_next` assets exist.
 

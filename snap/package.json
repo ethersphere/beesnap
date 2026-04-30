@@ -1,6 +1,6 @@
 {
   "name": "@beesnap/snap",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Ethereum Swarm MetaMask Snap — buy storage on Swarm and upload files to a Bee node from inside MetaMask.",
   "repository": {
     "type": "git",

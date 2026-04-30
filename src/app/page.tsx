@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react';
 
 const SNAP_ID = process.env.NEXT_PUBLIC_SNAP_ID || 'local:http://localhost:8080';
-const SNAP_VERSION = process.env.NEXT_PUBLIC_SNAP_VERSION || '0.1.4';
+const SNAP_VERSION = process.env.NEXT_PUBLIC_SNAP_VERSION || '0.1.5';
 
 const IS_LOCAL_SNAP = SNAP_ID.startsWith('local:');
 
@@ -89,7 +89,17 @@ export default function InstallPage() {
 
   return (
     <div className="install-card">
-      <h1>Beesnap</h1>
+      <header className="install-header">
+        <img
+          className="install-logo"
+          src="./favicon.png"
+          alt="Beesnap"
+          width={56}
+          height={56}
+          decoding="async"
+        />
+        <h1>Beesnap</h1>
+      </header>
       <p className="lead">
         Swarm bee snap integration with MetaMask — buy postage stamps and upload files from your
         wallet.
