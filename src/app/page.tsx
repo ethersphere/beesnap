@@ -92,10 +92,10 @@ export default function InstallPage() {
       <header className="install-header">
         <img
           className="install-logo"
-          src="./favicon.png"
+          src="./beesnap-mark.svg"
           alt="Beesnap"
-          width={56}
-          height={56}
+          width={64}
+          height={64}
           decoding="async"
         />
         <h1>Beesnap</h1>
