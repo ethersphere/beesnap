@@ -1,5 +1,5 @@
 {
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Ethereum Swarm — postage storage and uploads via MetaMask Snaps.",
   "proposedName": "BeeSnap",
   "repository": {
@@ -8,7 +8,7 @@
     "directory": "snap"
   },
   "source": {
-    "shasum": "QH6+pGynvVATSatSLaiQbevBWxet3Vbq8zhZLngG6VA=",
+    "shasum": "OhOLjS+QXUVxaZJdOdcDo+TV6Fz0XJFyNjORg61C4ow=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
